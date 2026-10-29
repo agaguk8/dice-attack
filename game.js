@@ -408,14 +408,62 @@ async function playRobotTurn() {
 
     let players = data.players || {};
     let robotData = players[robotName];
-    let gameOver = false;
-    let loserName = null;
+    if(!robotData) return;
 
-    for(let pName in players) {
-        players[pName].lastHits = {};
-        players[pName].lastUpgradedTurret = null;
+    // 1. ÉTAPE D'AMÉLIORATION DU ROBOT
+    let turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
+    // On cherche les tourelles du robot qui ne sont pas encore au max (6)
+    let availableTurrets = turretPairs.filter(t => (robotData.turrets[t] || 1) < 6);
+
+    let upgradedTurretKey = null;
+    if (availableTurrets.length > 0) {
+        // Le robot choisit l'une d'entre elles au hasard (ou la première)
+        let randomTurret = availableTurrets[Math.floor(Math.random() * availableTurrets.length)];
+        robotData.turrets[randomTurret] = (robotData.turrets[randomTurret] || 1) + 1;
+        robotData.lastUpgradedTurret = randomTurret;
+        upgradedTurretKey = randomTurret;
     }
 
+    // 2. ÉTAPE DE TIR DE DÉFENSE DU ROBOT
+    // S'il lui reste des tourelles à améliorer, il tire avec celle qu'il vient d'améliorer, sinon il prend une tourelle au hasard
+    let firingTurretKey = upgradedTurretKey || turretPairs[Math.floor(Math.random() * turretPairs.length)];
+    let robotTurretForce = robotData.turrets[firingTurretKey] || 1;
+
+    let robotRolls = [];
+    for(let i=0; i<robotTurretForce; i++) {
+        robotRolls.push(Math.floor(Math.random() * 6) + 1);
+    }
+
+    let parts = firingTurretKey.split('_');
+    let p1 = parseInt(parts[0], 10);
+    let p2 = parseInt(parts[1], 10);
+
+    let robotHits = {};
+    [p1, p2].forEach(col => {
+        robotRolls.forEach(res => {
+            const key = `${col}-${res}`;
+            robotHits[key] = (robotHits[key] || 0) + 1;
+        });
+    });
+    robotData.lastHits = robotHits;
+
+    // Application des dégâts du robot sur ses propres monstres
+    if(robotData.enemies) {
+        [p1, p2].forEach(col => {
+            robotRolls.forEach(res => {
+                let enemy = robotData.enemies[col];
+                if(enemy && enemy.pos === res) {
+                    enemy.hp -= 1;
+                    if(enemy.hp <= 0 || col === 1) {
+                        enemy.pos = 6;
+                        enemy.hp = col;
+                    }
+                }
+            });
+        });
+    }
+
+    // 3. ÉTAPE D'ATTAQUE ENNEMIE DU ROBOT SUR LES AUTRES JOUEURS
     let isRobotAllMax = areAllTurretsMax(robotData.turrets);
     if (!robotData.maxTurnsCount) {
         robotData.maxTurnsCount = 0;
@@ -430,6 +478,16 @@ async function playRobotTurn() {
     let attackRolls = [];
     for(let i=0; i<attackDiceCount; i++) {
         attackRolls.push(Math.floor(Math.random() * 6) + 1);
+    }
+
+    let gameOver = false;
+    let loserName = null;
+
+    // Réinitialisation des impacts des autres joueurs
+    for(let pName in players) {
+        if(pName !== robotName) {
+            players[pName].lastHits = {};
+        }
     }
 
     for(let pName in players) {
@@ -455,6 +513,7 @@ async function playRobotTurn() {
     }
 
     let logs = data.logs || [];
+
     if(gameOver) {
         logs.unshift(`🚨 Le Robot ${robotName} a provoqué la chute de la porte de ${loserName}. ${loserName} a perdu !`);
         await update(roomRef, {
@@ -471,18 +530,19 @@ async function playRobotTurn() {
         return;
     }
 
+    // Passage au joueur suivant
     let playerNames = Object.keys(players);
     let currentIndex = playerNames.indexOf(robotName);
     let nextIndex = (currentIndex + 1) % playerNames.length;
     let nextPlayer = playerNames[nextIndex];
 
-    logs.unshift(`🤖 Le Robot ${robotName} a joué. Attaque ennemie [${attackRolls.join(', ')}] (${attackDiceCount} dés). Tour de ${nextPlayer}.`);
+    let upgradeLogMsg = upgradedTurretKey ? `a amélioré sa tourelle ${upgradedTurretKey.replace('_', '/')} et ` : ``;
+    logs.unshift(`🤖 Le Robot ${robotName} ${upgradeLogMsg}a tiré avec ${firingTurretKey.replace('_', '/')} (Force ${robotTurretForce}). Attaque ennemie [${attackRolls.join(', ')}] (${attackDiceCount} dés). Tour de ${nextPlayer}.`);
 
+    turnStep = 1;
     let nextPlayerData = players[nextPlayer];
     if (nextPlayerData && areAllTurretsMax(nextPlayerData.turrets)) {
         turnStep = 2;
-    } else {
-        turnStep = 1;
     }
 
     await update(roomRef, {
@@ -493,6 +553,7 @@ async function playRobotTurn() {
         logs: logs.slice(0, 20)
     });
 
+    // Si le joueur suivant est aussi un robot, on relance sa boucle après un court délai
     if(nextPlayer.startsWith("Robot_")) {
         setTimeout(playRobotTurn, 1500);
     }
