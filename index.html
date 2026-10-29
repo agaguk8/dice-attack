@@ -99,7 +99,7 @@
         #game-screen {
             display: none;
             width: 100%;
-            max-width: 1200px;
+            max-width: 1400px;
         }
 
         .game-header {
@@ -113,16 +113,69 @@
             margin-bottom: 20px;
         }
 
+        /* Conteneur des tourelles alignées précisément avec les portes */
+        .turrets-bar {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            background: var(--panel-bg);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .turret-card {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .turret-card:hover {
+            border-color: var(--gold);
+            transform: translateY(-2px);
+        }
+
+        /* Section multi-plateaux */
+        .all-players-container {
+            display: flex;
+            gap: 20px;
+            overflow-x: auto;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .player-board-wrapper {
+            background: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            min-width: 480px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        }
+
+        .player-board-wrapper.is-me {
+            border-color: var(--gold);
+        }
+
+        .player-title {
+            font-size: 1.1rem;
+            color: var(--gold);
+            margin-bottom: 12px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
         .battlefield-container {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
-            gap: 15px;
-            background: var(--panel-bg);
-            padding: 25px;
-            border-radius: 12px;
-            border: 2px solid var(--border-color);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            margin-bottom: 20px;
+            gap: 8px;
         }
 
         .path-column {
@@ -131,8 +184,7 @@
             align-items: center;
             background: rgba(15, 23, 42, 0.6);
             border-radius: 8px;
-            padding: 10px 5px;
-            position: relative;
+            padding: 8px 4px;
         }
 
         .path-1 { border-top: 4px solid var(--c-green); }
@@ -148,10 +200,10 @@
             border-radius: 6px;
             width: 100%;
             text-align: center;
-            padding: 8px 2px;
-            margin-bottom: 15px;
+            padding: 6px 2px;
+            margin-bottom: 10px;
             font-weight: bold;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
         }
 
         .gate.broken {
@@ -162,15 +214,15 @@
 
         .cells-container {
             display: flex;
-            flex-direction: column-reverse;
-            gap: 8px;
+            flex-direction: column-reverse; /* 6 en bas, 1 en haut */
+            gap: 6px;
             width: 100%;
             align-items: center;
         }
 
         .cell {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border-radius: 6px;
             background: #1e293b;
             border: 1px solid var(--border-color);
@@ -178,7 +230,7 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             position: relative;
             transition: all 0.2s;
         }
@@ -187,47 +239,22 @@
             background: #ef4444 !important;
             color: white;
             transform: scale(1.1);
-            box-shadow: 0 0 12px #ef4444;
+            box-shadow: 0 0 10px #ef4444;
         }
 
         .enemy-token {
-            width: 26px;
-            height: 26px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             background: #ef4444;
             color: white;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
             border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-        }
-
-        .turrets-bar {
-            display: flex;
-            justify-content: space-around;
-            background: var(--panel-bg);
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 20px;
-        }
-
-        .turret-card {
-            background: #0f172a;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 10px 15px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .turret-card:hover {
-            border-color: var(--gold);
-            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
 
         .controls-panel {
@@ -277,25 +304,28 @@
         <div class="game-header">
             <div>
                 <strong>Salon :</strong> <span id="display-room">-</span> | 
-                <strong>Joueur :</strong> <span id="display-player">-</span>
+                <strong>Chevalier :</strong> <span id="display-player">-</span>
             </div>
             <button class="btn" style="width: auto; margin-top: 0; padding: 6px 12px; background: #ef4444; color: white;" onclick="leaveGame()">Quitter</button>
         </div>
 
+        <!-- Tourelles positionnées précisément entre les portes (5/6, 4/5, 3/4, 2/3, 1/2) -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <div class="battlefield-container" id="battlefield"></div>
+        <!-- Section affichant les plateaux de TOUS les joueurs en temps réel -->
+        <div class="all-players-container" id="all-players-boards"></div>
 
+        <!-- Panneau de Contrôle & Logs -->
         <div class="controls-panel">
             <div class="panel-box">
                 <h3>Actions de Combat</h3>
-                <button class="btn" onclick="triggerAttackPhase()">Lancer l'Attaque ennemie (2 Dés)</button>
+                <button class="btn" onclick="triggerAttackPhase()">Lancer l'Attaque des Monstres (Pour tous)</button>
                 <div id="dice-result" style="margin-top: 10px; font-weight: bold; color: var(--gold);"></div>
             </div>
             <div class="panel-box">
                 <h3>Journal des Batailles</h3>
                 <div class="log-box" id="game-logs">
-                    <div>Partie initialisée. En attente des actions...</div>
+                    <div>En attente des actions...</div>
                 </div>
             </div>
         </div>
@@ -330,10 +360,9 @@
             if (!snapshot.exists()) {
                 await set(roomRef, {
                     creator: playerName,
-                    turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
+                    turrets: { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 },
                     players: {
                         [playerName]: {
-                            gates: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 },
                             gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
                             enemies: {
                                 1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
@@ -344,17 +373,18 @@
                     logs: [`Le chevalier ${playerName} a ouvert la lice.`]
                 });
             } else {
-                const playerData = snapshot.val().players?.[playerName];
-                if (!playerData) {
-                    await update(ref(db, `rooms/${currentRoom}/players/${playerName}`), {
-                        gates: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 },
-                        gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
-                        enemies: {
-                            1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
-                            4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
-                        }
-                    });
+                const roomData = snapshot.val();
+                if (!roomData.players) {
+                    roomData.players = {};
                 }
+                // Ajout automatique du nouveau joueur s'il n'existe pas
+                await update(ref(db, `rooms/${currentRoom}/players/${playerName}`), {
+                    gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                    enemies: {
+                        1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
+                        4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
+                    }
+                });
             }
 
             document.getElementById('lobby-screen').style.display = 'none';
@@ -362,7 +392,7 @@
             document.getElementById('display-room').innerText = currentRoom;
             document.getElementById('display-player').innerText = playerName;
 
-            initGameUI();
+            initTurretsUI();
             listenToRoom();
         };
 
@@ -370,35 +400,23 @@
             location.reload();
         };
 
-        function initGameUI() {
+        function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
+            // Ordre de gauche à droite correspondant aux interstices entre les portes 6-5, 5-4, 4-3, 3-2, 2-1
+            const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
             
             turretPairs.forEach(t => {
                 const labelName = t.replace('_', '/');
                 turretsContainer.innerHTML += `
                     <div class="turret-card" onclick="upgradeTurret('${t}')">
-                        <div><strong>Tourelle ${labelName}</strong></div>
-                        <div style="font-size: 1.2rem; color: var(--gold); margin: 5px 0;" id="turret-val-${t}">1</div>
-                        <div style="font-size: 0.75rem; color: #94a3b8;">Cliquer pour améliorer (+1)</div>
-                        <button class="btn" style="padding: 4px 8px; font-size: 0.75rem; margin-top: 5px;" onclick="fireTurret(event, '${t}')">Tirer</button>
+                        <div style="font-size: 0.8rem; font-weight: bold; color: var(--gold);">Tourelle ${labelName}</div>
+                        <div style="font-size: 1.1rem; margin: 3px 0;" id="turret-val-${t}">1</div>
+                        <div style="font-size: 0.65rem; color: #94a3b8;">[Dessus: 1 | Avant: 3]</div>
+                        <button class="btn" style="padding: 3px 6px; font-size: 0.7rem; margin-top: 4px;" onclick="fireTurret(event, '${t}')">Tirer</button>
                     </div>
                 `;
             });
-
-            const battlefield = document.getElementById('battlefield');
-            battlefield.innerHTML = '';
-            for (let path = 6; path >= 1; path--) {
-                battlefield.innerHTML += `
-                    <div class="path-column path-${path}">
-                        <div class="gate" id="gate-${path}">Porte ${path}<br><span id="gate-status-${path}">Intacte (${path} PV)</span></div>
-                        <div class="cells-container" id="cells-${path}">
-                            ${[6, 5, 4, 3, 2, 1].map(c => `<div class="cell" id="cell-${path}-${c}">${c}</div>`).join('')}
-                        </div>
-                    </div>
-                `;
-            }
         }
 
         window.upgradeTurret = async function(turretKey) {
@@ -426,9 +444,10 @@
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
+            // Animation visuelle locale des tirs sur son propre plateau
             rolls.forEach(res => {
                 const targetPath = Math.random() < 0.5 ? p1 : p2;
-                const cellEl = document.getElementById(`cell-${targetPath}-${res}`);
+                const cellEl = document.getElementById(`cell-${playerName}-${targetPath}-${res}`);
                 if(cellEl) {
                     cellEl.classList.add('hit-active');
                     setTimeout(() => cellEl.classList.remove('hit-active'), 800);
@@ -448,35 +467,40 @@
 
             document.getElementById('dice-result').innerText = `Dés d'attaque : [${d1}] et [${d2}]`;
 
-            const playerRef = ref(db, `rooms/${currentRoom}/players/${playerName}`);
-            const snap = await get(playerRef);
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snap = await get(roomRef);
             if(!snap.exists()) return;
 
-            let data = snap.val();
-            let enemies = data.enemies;
-            let gateStatus = data.gateStatus || {1:'intact', 2:'intact', 3:'intact', 4:'intact', 5:'intact', 6:'intact'};
+            let roomData = snap.val();
+            let players = roomData.players || {};
 
-            [d1, d2].forEach(pathNum => {
-                if(enemies[pathNum]) {
-                    if(enemies[pathNum].pos > 1) {
-                        enemies[pathNum].pos -= 1;
-                    } else {
-                        if(gateStatus[pathNum] === 'intact') {
-                            gateStatus[pathNum] = 'damaged';
-                        } else if(gateStatus[pathNum] === 'damaged') {
-                            gateStatus[pathNum] = 'broken';
-                            alert(`ALERTE ! La Porte ${pathNum} de ${playerName} a été brisée par un monstre marin !`);
+            // Faire progresser les ennemis pour TOUS les joueurs connectés en même temps
+            for(let pName in players) {
+                let pData = players[pName];
+                let enemies = pData.enemies;
+                let gateStatus = pData.gateStatus;
+
+                [d1, d2].forEach(pathNum => {
+                    if(enemies[pathNum]) {
+                        if(enemies[pathNum].pos > 1) {
+                            enemies[pathNum].pos -= 1; // Avance vers la porte (de 6 vers 1)
+                        } else {
+                            if(gateStatus[pathNum] === 'intact') {
+                                gateStatus[pathNum] = 'damaged';
+                            } else if(gateStatus[pathNum] === 'damaged') {
+                                gateStatus[pathNum] = 'broken';
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
 
-            await update(playerRef, { enemies, gateStatus });
+            await update(ref(db, `rooms/${currentRoom}/players`), players);
 
             const logRef = ref(db, `rooms/${currentRoom}/logs`);
             const logSnap = await get(logRef);
             let logs = logSnap.val() || [];
-            logs.unshift(`${playerName} subit une attaque ennemie (chemins ${d1} et ${d2}) !`);
+            logs.unshift(`Attaque des monstres [${d1} et ${d2}] ! Les lignes bougent.`);
             await set(logRef, logs.slice(0, 20));
         };
 
@@ -486,6 +510,7 @@
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
 
+                // MAJ des valeurs de tourelles
                 if(roomData.turrets) {
                     for(let [tKey, val] of Object.entries(roomData.turrets)) {
                         const el = document.getElementById(`turret-val-${tKey}`);
@@ -493,37 +518,60 @@
                     }
                 }
 
-                if(roomData.players && roomData.players[playerName]) {
-                    const pData = roomData.players[playerName];
-                    
-                    for(let p=1; p<=6; p++) {
-                        for(let c=1; c<=6; c++) {
-                            const cell = document.getElementById(`cell-${p}-${c}`);
-                            if(cell) cell.innerHTML = c;
-                        }
-                        const statusSpan = document.getElementById(`gate-status-${p}`);
-                        const gateBox = document.getElementById(`gate-${p}`);
-                        const status = pData.gateStatus?.[p] || 'intact';
-                        if(status === 'intact') {
-                            statusSpan.innerText = `Intacte (${p} PV)`;
-                            gateBox.classList.remove('broken');
-                        } else if(status === 'damaged') {
-                            statusSpan.innerText = `Endommagée`;
-                            gateBox.classList.add('broken');
-                        } else {
-                            statusSpan.innerText = `BRISÉE !`;
-                            gateBox.classList.add('broken');
-                        }
-                    }
+                // MAJ et rendu des plateaux de TOUS les joueurs
+                if(roomData.players) {
+                    const container = document.getElementById('all-players-boards');
+                    container.innerHTML = '';
 
-                    for(let [pathId, enemy] of Object.entries(pData.enemies)) {
-                        const cell = document.getElementById(`cell-${pathId}-${enemy.pos}`);
-                        if(cell) {
-                            cell.innerHTML = `<div class="enemy-token" title="PV: ${enemy.hp}">${enemy.pos}</div>`;
+                    for(let pName in roomData.players) {
+                        const pData = roomData.players[pName];
+                        const isMe = (pName === playerName);
+
+                        let boardHTML = `
+                            <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
+                                <div class="player-title">
+                                    <span>Chevalier : ${pName} ${isMe ? '(Vous)' : ''}</span>
+                                </div>
+                                <div class="battlefield-container">
+                        `;
+
+                        // Chemins de 6 à 1 (de gauche à droite sur l'affichage ou l'inverse)
+                        for (let path = 6; path >= 1; path--) {
+                            const status = pData.gateStatus?.[path] || 'intact';
+                            let gateClass = '';
+                            let gateText = `Porte ${path}<br>(${path} PV)`;
+                            if(status === 'damaged') {
+                                gateClass = 'broken';
+                                gateText = `Porte ${path}<br>Endommagée`;
+                            } else if(status === 'broken') {
+                                gateClass = 'broken';
+                                gateText = `Porte ${path}<br>BRISÉE`;
+                            }
+
+                            boardHTML += `
+                                <div class="path-column path-${path}">
+                                    <div class="gate ${gateClass}" id="gate-${pName}-${path}">${gateText}</div>
+                                    <div class="cells-container">
+                            `;
+
+                            // Cases de 6 (bas) vers 1 (haut)
+                            for(let c = 6; c >= 1; c--) {
+                                let enemyTokenHTML = '';
+                                if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
+                                    enemyTokenHTML = `<div class="enemy-token" title="Ennemi sur case ${c}">👹</div>`;
+                                }
+                                boardHTML += `<div class="cell" id="cell-${pName}-${path}-${c}">${enemyTokenHTML || c}</div>`;
+                            }
+
+                            boardHTML += `</div></div>`;
                         }
+
+                        boardHTML += `</div></div>`;
+                        container.innerHTML += boardHTML;
                     }
                 }
 
+                // MAJ des logs
                 if(roomData.logs) {
                     const logsContainer = document.getElementById('game-logs');
                     logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
