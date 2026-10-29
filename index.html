@@ -362,7 +362,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde 1.2</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V1.3</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -451,8 +451,8 @@
         }
 
         window.joinLobby = async function() {
-            playerName = document.getElementById('player-name'].value.trim();
-            currentRoom = document.getElementById('room-code'].value.trim();
+            playerName = document.getElementById('player-name').value.trim();
+            currentRoom = document.getElementById('room-code').value.trim();
 
             if (!playerName || !currentRoom) {
                 alert("Veuillez entrer un nom et un code de salon.");
@@ -462,13 +462,11 @@
             const roomRef = ref(db, 'rooms/' + currentRoom);
             const snapshot = await get(roomRef);
 
-            // Vérification anti-inactivité de 5 minutes sur la room existante
             if (snapshot.exists()) {
                 const data = snapshot.val();
                 const now = Date.now();
                 const lastActivity = data.lastActivity || now;
                 if (now - lastActivity > 5 * 60 * 1000) {
-                    // Salon expiré (> 5 min), on le réinitialise
                     await remove(roomRef);
                 }
             }
@@ -480,13 +478,11 @@
                 initialEnemies[i] = { pos: 6, hp: i };
             }
 
-            // Portes initialisées avec leurs points de vie maximaux selon leur chemin (chemin 1 = 1 PV, chemin 6 = 6 PV)
             const initialGates = {};
             for(let i=1; i<=6; i++) {
                 initialGates[i] = i; 
             }
 
-            // Tourelles individuelles initialisées à 1 pour chaque joueur
             const initialTurrets = { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
 
             if (!snapCheck.exists()) {
@@ -589,7 +585,6 @@
             });
         }
 
-        // ÉTAPE 1 : Amélioration obligatoire INDIVIDUELLE (Max 6, devient grisé)
         window.upgradeTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -632,7 +627,6 @@
             updateTurnUI(data.activePlayer, myData.turrets);
         };
 
-        // ÉTAPE 2 : Tir de défense INDIVIDUEL (Utilise la force de la tourelle individuelle du joueur)
         window.fireTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -699,7 +693,6 @@
             renderBoards(players);
         };
 
-        // ÉTAPE 3 : Terminer le tour (Vérifie les conditions de défaite/victoire et fait avancer les ennemis chez les adversaires)
         window.finishTurn = async function() {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -719,7 +712,6 @@
             let gameOver = false;
             let loserName = null;
 
-            // Avancée des ennemis sur les plateaux des adversaires
             for(let pName in players) {
                 if(pName === playerName) continue; 
 
@@ -732,11 +724,9 @@
                         if(enemies[pathNum].pos > 1) {
                             enemies[pathNum].pos -= 1;
                         } else {
-                            // L'ennemi tente de traverser la porte (pos === 1)
                             if(gates[pathNum] > 0) {
-                                gates[pathNum] -= 1; // Perds 1 PV de porte
+                                gates[pathNum] -= 1;
                             } else {
-                                // Porte déjà à 0 PV (brisée), l'ennemi traverse ! Le joueur perd la partie.
                                 gameOver = true;
                                 loserName = pName;
                             }
@@ -768,9 +758,6 @@
 
             turnStep = 1;
             lastHits = {};
-
-            let nextPlayerData = players[nextPlayer];
-            let nextTurrets = nextPlayerData ? nextPlayerData.turrets : { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
 
             await update(roomRef, {
                 activePlayer: nextPlayer,
@@ -861,7 +848,6 @@
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
 
-                // Vérification inactivité de plus de 5 minutes
                 if (roomData.lastActivity && (Date.now() - roomData.lastActivity > 5 * 60 * 1000)) {
                     remove(roomRef);
                     alert("Le salon a été réinitialisé en raison d'une inactivité de plus de 5 minutes.");
@@ -890,7 +876,6 @@
         }
 
         function processGameData(roomData) {
-            // Affichage des valeurs des tourelles INDIVIDUELLES du joueur connecté
             if(roomData.players && roomData.players[playerName] && roomData.players[playerName].turrets) {
                 const myTurrets = roomData.players[playerName].turrets;
                 for(let [tKey, val] of Object.entries(myTurrets)) {
@@ -933,7 +918,6 @@
                     const currentVal = myTurrets ? (myTurrets[t] || 1) : 1;
 
                     if(turnStep === 1) {
-                        // Si la tourelle est au max (6), le bouton améliorer est grisé/désactivé
                         if(currentVal >= 6) {
                             btnUp.disabled = true;
                             btnUp.innerText = "MAX (6)";
@@ -997,7 +981,7 @@
                 for (let path = 6; path >= 1; path--) {
                     const gatePv = pData.gates?.[path] !== undefined ? pData.gates[path] : path;
                     let gateClass = '';
-                    let gateText = `Porte ${path}<br><span style="color:${gatePv === 0 ? '#ef4444' : (gatePv < path ? '#f9a825' : 'var(--gold)}')}; font-weight:bold;">${gatePv} PV</span>`;
+                    let gateText = `Porte ${path}<br><span style="color:${gatePv === 0 ? '#ef4444' : (gatePv < path ? '#f9a825' : 'var(--gold)')}; font-weight:bold;">${gatePv} PV</span>`;
                     
                     if(gatePv === 0) {
                         gateClass = 'broken';
