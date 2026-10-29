@@ -161,7 +161,6 @@
             transition: all 0.2s;
         }
 
-        /* Tourelle récemment améliorée (illumination verte) */
         .turret-card.just-upgraded {
             border-color: #22c55e !important;
             background: rgba(34, 197, 94, 0.15);
@@ -213,7 +212,6 @@
             align-items: center;
         }
 
-        /* Affichage des tourelles intégrées dans chaque plateau */
         .board-turrets-mini {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -435,10 +433,10 @@
 
         <div class="turn-banner" id="turn-banner">En attente du tour...</div>
 
-        <!-- Vos tourelles principales de contrôle -->
+        <!-- Tourelles de contrôle -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Plateaux (Votre plateau à gauche, suivi des autres) -->
+        <!-- Plateaux (Votre plateau à gauche) -->
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
@@ -667,7 +665,7 @@
 
             val += 1;
             myData.turrets[turretKey] = val;
-            myData.lastUpgradedTurret = turretKey; // Marque cette tourelle comme récemment améliorée
+            myData.lastUpgradedTurret = turretKey;
 
             let logs = data.logs || [];
             logs.unshift(`${playerName} a renforcé sa tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
@@ -702,21 +700,15 @@
             let myData = players[playerName];
             if(!myData || !myData.turrets) return;
 
-            let baseForce = myData.turrets[turretKey] || 1;
-            let extraBonusDice = 0;
-            if (areAllTurretsMax(myData.turrets)) {
-                extraBonusDice = Math.floor(((data.turnCount || 1) - 1)); 
-                if (extraBonusDice < 0) extraBonusDice = 0;
-            }
-
-            const totalForce = baseForce + extraBonusDice;
+            // La force de tir reste strictement plafonnée au niveau max (6 max, sans empilement infini)
+            const force = myData.turrets[turretKey] || 1;
             
             const parts = turretKey.split('_');
             const p1 = parseInt(parts[0], 10);
             const p2 = parseInt(parts[1], 10);
 
             let rolls = [];
-            for(let i=0; i<totalForce; i++) {
+            for(let i=0; i<force; i++) {
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
@@ -745,7 +737,7 @@
             }
 
             let logs = data.logs || [];
-            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force totale: ${totalForce}) -> Dés [${rolls.join(', ')} sur les colonnes ${p1} et ${p2}].`);
+            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force: ${force}) -> Dés [${rolls.join(', ')} sur les colonnes ${p1} et ${p2}].`);
             
             await update(roomRef, { 
                 players: players,
@@ -768,18 +760,37 @@
                 return;
             }
 
-            const d1 = Math.floor(Math.random() * 6) + 1;
-            const d2 = Math.floor(Math.random() * 6) + 1;
-            document.getElementById('dice-result').innerText = `Dés d'attaque : [${d1}] et [${d2}]`;
-
             let players = data.players || {};
+            let myData = players[playerName];
+
+            // Vérification si le joueur courant a TOUTES ses tourelles max (6)
+            let isMyTurretsAllMax = areAllTurretsMax(myData.turrets);
+
+            // Nombre de dés d'attaque de base = 2. 
+            // Si le joueur actif a tout maxé, on augmente le nombre de dés d'attaque de +1 à chaque tour où il joue.
+            // On stocke un compteur de tours max par joueur ou global, ou on utilise l'augmentation basée sur ses tours passés.
+            if (!myData.maxTurnsCount) {
+                myData.maxTurnsCount = 0;
+            }
+
+            let attackDiceCount = 2;
+            if (isMyTurretsAllMax) {
+                myData.maxTurnsCount += 1;
+                attackDiceCount = 2 + myData.maxTurnsCount; // 3, puis 4, puis 5, etc.
+            }
+
+            let attackRolls = [];
+            for(let i=0; i<attackDiceCount; i++) {
+                attackRolls.push(Math.floor(Math.random() * 6) + 1);
+            }
+
+            document.getElementById('dice-result').innerText = `Dés d'attaque (${attackDiceCount}) : [${attackRolls.join(', ')}]`;
+
             let gameOver = false;
             let loserName = null;
 
-            // Réinitialisation des indicateurs temporaires (impacts et tourelle verte) pour tous au changement de tour
             for(let pName in players) {
                 players[pName].lastHits = {};
-                players[pName].lastUpgradedTurret = null;
             }
 
             for(let pName in players) {
@@ -789,7 +800,7 @@
                 let enemies = pData.enemies;
                 let gates = pData.gates;
 
-                [d1, d2].forEach(pathNum => {
+                attackRolls.forEach(pathNum => {
                     if(enemies[pathNum]) {
                         if(enemies[pathNum].pos > 1) {
                             enemies[pathNum].pos -= 1;
@@ -824,7 +835,7 @@
             let nextIndex = (currentIndex + 1) % playerNames.length;
             let nextPlayer = playerNames[nextIndex];
 
-            logs.unshift(`${playerName} a terminé son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
+            logs.unshift(`${playerName} a terminé son tour. Attaque ennemie [${attackRolls.join(', ')}] (${attackDiceCount} dés) chez les adversaires. Tour de ${nextPlayer}.`);
 
             turnStep = 1;
 
@@ -855,6 +866,7 @@
             if(!robotName || !robotName.startsWith("Robot_")) return;
 
             let players = data.players || {};
+            let robotData = players[robotName];
             let gameOver = false;
             let loserName = null;
 
@@ -863,8 +875,21 @@
                 players[pName].lastUpgradedTurret = null;
             }
 
-            const d1 = Math.floor(Math.random() * 6) + 1;
-            const d2 = Math.floor(Math.random() * 6) + 1;
+            let isRobotAllMax = areAllTurretsMax(robotData.turrets);
+            if (!robotData.maxTurnsCount) {
+                robotData.maxTurnsCount = 0;
+            }
+
+            let attackDiceCount = 2;
+            if (isRobotAllMax) {
+                robotData.maxTurnsCount += 1;
+                attackDiceCount = 2 + robotData.maxTurnsCount;
+            }
+
+            let attackRolls = [];
+            for(let i=0; i<attackDiceCount; i++) {
+                attackRolls.push(Math.floor(Math.random() * 6) + 1);
+            }
 
             for(let pName in players) {
                 if(pName === robotName) continue;
@@ -872,7 +897,7 @@
                 let enemies = pData.enemies;
                 let gates = pData.gates;
 
-                [d1, d2].forEach(pathNum => {
+                attackRolls.forEach(pathNum => {
                     if(enemies[pathNum]) {
                         if(enemies[pathNum].pos > 1) {
                             enemies[pathNum].pos -= 1;
@@ -890,7 +915,7 @@
 
             let logs = data.logs || [];
             if(gameOver) {
-                logs.unshift(`🚨 Le Robot a provoqué la chute de la porte de ${loserName}. ${loserName} a perdu !`);
+                logs.unshift(`🚨 Le Robot ${robotName} a provoqué la chute de la porte de ${loserName}. ${loserName} a perdu !`);
                 await update(roomRef, {
                     status: 'gameover',
                     loser: loserName,
@@ -906,7 +931,7 @@
             let nextIndex = (currentIndex + 1) % playerNames.length;
             let nextPlayer = playerNames[nextIndex];
 
-            logs.unshift(`🤖 Le Robot ${robotName} a joué. Attaque : [${d1}, ${d2}]. Tour de ${nextPlayer}.`);
+            logs.unshift(`🤖 Le Robot ${robotName} a joué. Attaque ennemie [${attackRolls.join(', ')}] (${attackDiceCount} dés). Tour de ${nextPlayer}.`);
 
             let nextPlayerData = players[nextPlayer];
             if (nextPlayerData && areAllTurretsMax(nextPlayerData.turrets)) {
@@ -970,7 +995,6 @@
                     const el = document.getElementById(`turret-val-${tKey}`);
                     if(el) el.innerText = val;
 
-                    // Ajout visuel du fond vert sur le panneau de contrôle principal
                     const cardEl = document.getElementById(`turret-card-${tKey}`);
                     if(cardEl) {
                         if(lastUpgraded === tKey) {
@@ -1050,8 +1074,8 @@
                     btnFinish.disabled = true;
                 } else if(turnStep === 2) {
                     if (allMax) {
-                        banner.innerHTML = `🔥 TOUTES TOURELLES MAX ! Tirez avec un bonus de dés accru !`;
-                        instructions.innerText = `Toutes tourelles au max : vos dés augmentent à chaque tour ! Cliquez sur "Tirer".`;
+                        banner.innerHTML = `🔥 TOUTES TOURELLES MAX ! Vos tirs restent à force maximale (6 max). Attention aux attaques ennemies accrues !`;
+                        instructions.innerText = `Toutes tourelles au max : cliquez sur "Tirer" pour lancer vos défenses.`;
                     } else {
                         banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 2 : Tirez avec une tourelle.`;
                         instructions.innerText = `Étape 2 : Cliquez sur "Tirer" pour vous défendre.`;
@@ -1088,7 +1112,6 @@
                 const pTurrets = pData.turrets || { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
                 const lastUpgraded = pData.lastUpgradedTurret;
 
-                // Génération des tourelles intégrées dans le mini-barème de chaque plateau
                 let turretsMiniHTML = `<div class="board-turrets-mini">`;
                 const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
                 turretPairs.forEach(t => {
@@ -1157,6 +1180,6 @@
             });
         }
     </script>
-    V2.0
 </body>
+V2.1
 </html>
