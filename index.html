@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dice Attack - Chevaliers de la Table Ronde</title>
+    <style>
+        :root {
+            --c-green: #2e7d32;
+            --c-yellow: #f9a825;
+            --c-blue: #1565c0;
+            --c-pink: #ad1457;
+            --c-violet: #6a1b9a;
+            --c-orange: #ef6c00;
+            --bg-dark: #121824;
+            --panel-bg: #1e293b;
+            --border-color: #334155;
+            --gold: #d4af37;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
+            color: #f8fafc;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: var(--gold);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 20px;
+            font-style: italic;
+            text-align: center;
+        }
+
+        /* Lobby / Connection Screen */
+        #lobby-screen {
+            background: var(--panel-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 450px;
+            width: 100%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .btn {
+            background: var(--gold);
+            color: #0f172a;
+            border: none;
+            padding: 12px 20px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: background 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn:hover {
+            background: #e6c547;
+        }
+
+        /* Game Screen */
+        #game-screen {
+            display: none;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--panel-bg);
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .battlefield-container {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 15px;
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 12px;
+            border: 2px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            margin-bottom: 20px;
+        }
+
+        .path-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+            padding: 10px 5px;
+            position: relative;
+        }
+
+        .path-1 { border-top: 4px solid var(--c-green); }
+        .path-2 { border-top: 4px solid var(--c-yellow); }
+        .path-3 { border-top: 4px solid var(--c-blue); }
+        .path-4 { border-top: 4px solid var(--c-pink); }
+        .path-5 { border-top: 4px solid var(--c-violet); }
+        .path-6 { border-top: 4px solid var(--c-orange); }
+
+        .gate {
+            background: #0f172a;
+            border: 2px solid var(--gold);
+            border-radius: 6px;
+            width: 100%;
+            text-align: center;
+            padding: 8px 2px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .gate.broken {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .cells-container {
+            display: flex;
+            flex-direction: column-reverse; /* 6 en bas, 1 en haut */
+            gap: 8px;
+            width: 100%;
+            align-items: center;
+        }
+
+        .cell {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .cell.hit-active {
+            background: #ef4444 !important;
+            color: white;
+            transform: scale(1.1);
+            box-shadow: 0 0 12px #ef4444;
+        }
+
+        .enemy-token {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #ef4444;
+            color: white;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+
+        .turrets-bar {
+            display: flex;
+            justify-content: space-around;
+            background: var(--panel-bg);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .turret-card {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .turret-card:hover {
+            border-color: var(--gold);
+            transform: translateY(-2px);
+        }
+
+        .controls-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .panel-box {
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .log-box {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            height: 100px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Dice Attack</h1>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde</div>
+
+    <!-- LOBBY SCREEN -->
+    <div id="lobby-screen">
+        <h3>Rejoindre ou Créer une Partie</h3>
+        <div class="input-group">
+            <label>Votre Nom de Chevalier</label>
+            <input type="text" id="player-name" placeholder="Ex: Lancelot">
+        </div>
+        <div class="input-group">
+            <label>Code du Salon</label>
+            <input type="text" id="room-code" placeholder="Ex: table-ronde-1">
+        </div>
+        <button class="btn" onclick="joinGame()">Entrer dans la Lice</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen">
+        <div class="game-header">
+            <div>
+                <strong>Salon :</strong> <span id="display-room">-</span> | 
+                <strong>Joueur :</strong> <span id="display-player">-</span>
+            </div>
+            <button class="btn" style="width: auto; margin-top: 0; padding: 6px 12px; background: #ef4444; color: white;" onclick="leaveGame()">Quitter</button>
+        </div>
+
+        <!-- Tourrelles -->
+        <div class="turrets-bar" id="turrets-container">
+            <!-- Généré dynamiquement en JS -->
+        </div>
+
+        <!-- Battlefield Principal -->
+        <div class="battlefield-container" id="battlefield">
+            <!-- 6 Chemins générés dynamiquement -->
+        </div>
+
+        <!-- Panneau d'Actions & Logs -->
+        <div class="controls-panel">
+            <div class="panel-box">
+                <h3>Actions de Combat</h3>
+                <button class="btn" onclick="triggerAttackPhase()">Lancer l'Attaque ennemie (2 Dés)</button>
+                <div id="dice-result" style="margin-top: 10px; font-weight: bold; color: var(--gold);"></div>
+            </div>
+            <div class="panel-box">
+                <h3>Journal des Batailles</h3>
+                <div class="log-box" id="game-logs">
+                    <div>Partie initialisée. En attente des actions...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Version Modulaire v10) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // Configuration Firebase (À remplacer par vos propres identifiants Firebase si nécessaire, ou utilisez une instance de test)
+        const firebaseConfig = {
+            databaseURL: "https://dice-attack-default-rtdb.firebaseio.com/"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let currentRoom = null;
+        let playerName = null;
+
+        window.joinGame = async function() {
+            playerName = document.getElementById('player-name').value.trim();
+            currentRoom = document.getElementById('room-code').value.trim();
+
+            if (!playerName || !currentRoom) {
+                alert("Veuillez entrer un nom et un code de salon.");
+                return;
+            }
+
+            const roomRef = ref(db, 'rooms/' + currentRoom);
+            const snapshot = await get(roomRef);
+
+            if (!snapshot.exists()) {
+                // Création de la pièce avec état initial
+                await set(roomRef, {
+                    creator: playerName,
+                    turrets: { '1/2': 1, '2/3': 1, '3/4': 1, '4/5': 1, '5/6': 1 },
+                    players: {
+                        [playerName]: {
+                            gates: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 }, // 1 vie, 2 vies... jusqu'à 6 vies
+                            gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                            enemies: {
+                                1: { pos: 6, hp: 6 },
+                                2: { pos: 6, hp: 6 },
+                                3: { pos: 6, hp: 6 },
+                                4: { pos: 6, hp: 6 },
+                                5: { pos: 6, hp: 6 },
+                                6: { pos: 6, hp: 6 }
+                            }
+                        }
+                    },
+                    logs: [`Le chevalier ${playerName} a ouvert la lice.`]
+                });
+            } else {
+                // Rejoindre la pièce existante si le joueur n'y est pas
+                const playerData = snapshot.val().players?.[playerName];
+                if (!playerData) {
+                    await update(ref(db, `rooms/${currentRoom}/players/${playerName}`), {
+                        gates: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 },
+                        gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                        enemies: {
+                            1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
+                            4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
+                        }
+                    });
+                }
+            }
+
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            document.getElementById('display-room').innerText = currentRoom;
+            document.getElementById('display-player').innerText = playerName;
+
+            initGameUI();
+            listenToRoom();
+        };
+
+        window.leaveGame = function() {
+            location.reload();
+        };
+
+        function initGameUI() {
+            // Création des tourelles
+            const turretsContainer = document.getElementById('turrets-container');
+            turretsContainer.innerHTML = '';
+            const turretPairs = ['1/2', '2/3', '3/4', '4/5', '5/6'];
+            
+            turretPairs.forEach(t => {
+                turretsContainer.innerHTML += `
+                    <div class="turret-card" onclick="upgradeTurret('${t}')">
+                        <div><strong>Tourelle ${t}</strong></div>
+                        <div style="font-size: 1.2rem; color: var(--gold); margin: 5px 0;" id="turret-val-${t}">1</div>
+                        <div style="font-size: 0.75rem; color: #94a3b8;">Cliquer pour améliorer (+1)</div>
+                        <button class="btn" style="padding: 4px 8px; font-size: 0.75rem; margin-top: 5px;" onclick="fireTurret(event, '${t}')">Tirer</button>
+                    </div>
+                `;
+            });
+
+            // Création des colonnes de chemins (6 à gauche, 1 à droite ou inverse selon préférence)
+            const battlefield = document.getElementById('battlefield');
+            battlefield.innerHTML = '';
+            for (let path = 6; path >= 1; path--) {
+                battlefield.innerHTML += `
+                    <div class="path-column path-${path}">
+                        <div class="gate" id="gate-${path}">Porte ${path}<br><span id="gate-status-${path}">Intacte (6 PV)</span></div>
+                        <div class="cells-container" id="cells-${path}">
+                            <!-- Cases de 6 (bas) à 1 (haut) -->
+                            ${[6, 5, 4, 3, 2, 1].map(c => `<div class="cell" id="cell-${path}-${c}">${c}</div>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        window.upgradeTurret = async function(turretKey) {
+            const turretRef = ref(db, `rooms/${currentRoom}/turrets/${turretKey}`);
+            const snap = await get(turretRef);
+            let val = snap.val() || 1;
+            val = val >= 6 ? 1 : val + 1; // Boucle de 1 à 6
+            await set(turretRef, val);
+            
+            const logRef = ref(db, `rooms/${currentRoom}/logs`);
+            const logSnap = await get(logRef);
+            let logs = logSnap.val() || [];
+            logs.unshift(`${playerName} a renforcé la tourelle ${turretKey} (Force: ${val}).`);
+            await set(logRef, logs.slice(0, 20));
+        };
+
+        window.fireTurret = async function(event, turretKey) {
+            event.stopPropagation();
+            const turretSnap = await get(ref(db, `rooms/${currentRoom}/turrets/${turretKey}`));
+            const force = turretSnap.val() || 1;
+
+            // Déterminer les deux chemins concernés par la tourelle (ex: '1/2' -> chemins 1 et 2)
+            const [p1, p2] = turretKey.split('/').map(Number);
+
+            // Lancer 'force' dés
+            let rolls = [];
+            for(let i=0; i<force; i++) {
+                rolls.print ? null : rolls.push(Math.floor(Math.random() * 6) + 1);
+            }
+
+            // Animation visuelle des tirs touchés
+            rolls.forEach(res => {
+                // Touche aléatoirement l'un des deux chemins sur la case égale au résultat du dé
+                const targetPath = Math.random() < 0.5 ? p1 : p2;
+                const cellEl = document.getElementById(`cell-${targetPath}-${res}`);
+                if(cellEl) {
+                    cellEl.classList.add('hit-active');
+                    setTimeout(() => cellEl.classList.remove('hit-active'), 800);
+                }
+            });
+
+            // Log de tir
+            const logRef = ref(db, `rooms/${currentRoom}/logs`);
+            const logSnap = await get(logRef);
+            let logs = logSnap.val() || [];
+            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey} (Force ${force}) -> Résultats: [${rolls.join(', ')}].`);
+            await set(logRef, logs.slice(0, 20));
+        };
+
+        window.triggerAttackPhase = async function() {
+            // Lance 2 dés d'attaque qui font progresser les ennemis vers le haut (diminution de la position vers 1)
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+
+            document.getElementById('dice-result').innerText = `Dés d'attaque : [${d1}] et [${d2}]`;
+
+            const playerRef = ref(db, `rooms/${currentRoom}/players/${playerName}`);
+            const snap = await get(playerRef);
+            if(!snap.exists()) return;
+
+            let data = snap.val();
+            let enemies = data.enemies;
+            let gateStatus = data.gateStatus || {1:'intact', 2:'intact', 3:'intact', 4:'intact', 5:'intact', 6:'intact'};
+
+            // Faire avancer les ennemis des chemins d1 et d2 d'une case vers le haut (vers 1)
+            [d1, d2].forEach(pathNum => {
+                if(enemies[pathNum]) {
+                    if(enemies[pathNum].pos > 1) {
+                        enemies[pathNum].pos -= 1; // Avance vers la porte
+                    } else {
+                        // L'ennemi est déjà sur 1, il frappe la porte !
+                        if(gateStatus[pathNum] === 'intact') {
+                            gateStatus[pathNum] = 'damaged';
+                        } else if(gateStatus[pathNum] === 'damaged') {
+                            gateStatus[pathNum] = 'broken';
+                            alert(`ALERTE ! La Porte ${pathNum} de ${playerName} a été brisée par un monstre marin !`);
+                        }
+                    }
+                }
+            });
+
+            await update(playerRef, { enemies, gateStatus });
+
+            const logRef = ref(db, `rooms/${currentRoom}/logs`);
+            const logSnap = await get(logRef);
+            let logs = logSnap.val() || [];
+            logs.unshift(`${playerName} subit une attaque ennemie (chemins ${d1} et ${d2}) !`);
+            await set(logRef, logs.slice(0, 20));
+        };
+
+        function listenToRoom() {
+            const roomRef = ref(db, 'rooms/' + currentRoom);
+            onValue(roomRef, (snapshot) => {
+                if(!snapshot.exists()) return;
+                const roomData = snapshot.val();
+
+                // Mettre à jour les tourelles
+                if(roomData.turrets) {
+                    for(let [tKey, val] of Object.entries(roomData.turrets)) {
+                        const el = document.getElementById(`turret-val-${tKey}`);
+                        if(el) el.innerText = val;
+                    }
+                }
+
+                // Mettre à jour le joueur actuel (plateau, ennemis, portes)
+                if(roomData.players && roomData.players[playerName]) {
+                    const pData = roomData.players[playerName];
+                    
+                    // Nettoyer tous les tokens ennemis
+                    for(let p=1; p<=6; p++) {
+                        for(let c=1; c<=6; c++) {
+                            const cell = document.getElementById(`cell-${p}-${c}`);
+                            if(cell) cell.innerHTML = c; // Réinitialiser le texte de la case
+                        }
+                        // Statut des portes
+                        const statusSpan = document.getElementById(`gate-status-${p}`);
+                        const gateBox = document.getElementById(`gate-${p}`);
+                        const status = pData.gateStatus?.[p] || 'intact';
+                        if(status === 'intact') {
+                            statusSpan.innerText = `Intacte (${p} PV)`;
+                            gateBox.classList.remove('broken');
+                        } else if(status === 'damaged') {
+                            statusSpan.innerText = `Endommagée`;
+                            gateBox.classList.add('broken');
+                        } else {
+                            statusSpan.innerText = `BRISÉE !`;
+                            gateBox.classList.add('broken');
+                        }
+                    }
+
+                    // Placer les ennemis sur leur case actuelle (progression du bas [6] vers le haut [1])
+                    for(let [pathId, enemy] of Object.entries(pData.enemies)) {
+                        const cell = document.getElementById(`cell-${pathId}-${enemy.pos}`);
+                        if(cell) {
+                            cell.innerHTML = `<div class="enemy-token" title="PV: ${enemy.hp}">${enemy.pos}</div>`;
+                        }
+                    }
+                }
+
+                // Mettre à jour les logs
+                if(roomData.logs) {
+                    const logsContainer = document.getElementById('game-logs');
+                    logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
