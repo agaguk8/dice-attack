@@ -113,7 +113,6 @@
             margin-bottom: 20px;
         }
 
-        /* Conteneur des tourelles alignées précisément avec les portes */
         .turrets-bar {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -140,7 +139,6 @@
             transform: translateY(-2px);
         }
 
-        /* Section multi-plateaux */
         .all-players-container {
             display: flex;
             gap: 20px;
@@ -214,7 +212,7 @@
 
         .cells-container {
             display: flex;
-            flex-direction: column-reverse; /* 6 en bas, 1 en haut */
+            flex-direction: column-reverse;
             gap: 6px;
             width: 100%;
             align-items: center;
@@ -309,17 +307,16 @@
             <button class="btn" style="width: auto; margin-top: 0; padding: 6px 12px; background: #ef4444; color: white;" onclick="leaveGame()">Quitter</button>
         </div>
 
-        <!-- Tourelles positionnées précisément entre les portes (5/6, 4/5, 3/4, 2/3, 1/2) -->
+        <!-- Tourelles de droite (1/2) à gauche (5/6) -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Section affichant les plateaux de TOUS les joueurs en temps réel -->
+        <!-- Plateau multi-joueurs -->
         <div class="all-players-container" id="all-players-boards"></div>
 
-        <!-- Panneau de Contrôle & Logs -->
         <div class="controls-panel">
             <div class="panel-box">
                 <h3>Actions de Combat</h3>
-                <button class="btn" onclick="triggerAttackPhase()">Lancer l'Attaque des Monstres (Pour tous)</button>
+                <button class="btn" onclick="triggerAttackPhase()">Lancer l'Attaque (Fait avancer les ennemis chez les ADVERSAIRES)</button>
                 <div id="dice-result" style="margin-top: 10px; font-weight: bold; color: var(--gold);"></div>
             </div>
             <div class="panel-box">
@@ -360,7 +357,7 @@
             if (!snapshot.exists()) {
                 await set(roomRef, {
                     creator: playerName,
-                    turrets: { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 },
+                    turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
                     players: {
                         [playerName]: {
                             gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
@@ -373,11 +370,6 @@
                     logs: [`Le chevalier ${playerName} a ouvert la lice.`]
                 });
             } else {
-                const roomData = snapshot.val();
-                if (!roomData.players) {
-                    roomData.players = {};
-                }
-                // Ajout automatique du nouveau joueur s'il n'existe pas
                 await update(ref(db, `rooms/${currentRoom}/players/${playerName}`), {
                     gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
                     enemies: {
@@ -403,8 +395,8 @@
         function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            // Ordre de gauche à droite correspondant aux interstices entre les portes 6-5, 5-4, 4-3, 3-2, 2-1
-            const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
+            // Ordre inversé : 1/2 à droite, jusqu'à 5/6 à gauche
+            const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
             
             turretPairs.forEach(t => {
                 const labelName = t.replace('_', '/');
@@ -444,7 +436,6 @@
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
-            // Animation visuelle locale des tirs sur son propre plateau
             rolls.forEach(res => {
                 const targetPath = Math.random() < 0.5 ? p1 : p2;
                 const cellEl = document.getElementById(`cell-${playerName}-${targetPath}-${res}`);
@@ -474,8 +465,10 @@
             let roomData = snap.val();
             let players = roomData.players || {};
 
-            // Faire progresser les ennemis pour TOUS les joueurs connectés en même temps
+            // Avancée des ennemis EXCLUSIVEMENT sur les plateaux des ADVERSAIRES
             for(let pName in players) {
+                if (pName === playerName) continue; // Ignore le joueur actuel
+
                 let pData = players[pName];
                 let enemies = pData.enemies;
                 let gateStatus = pData.gateStatus;
@@ -483,7 +476,7 @@
                 [d1, d2].forEach(pathNum => {
                     if(enemies[pathNum]) {
                         if(enemies[pathNum].pos > 1) {
-                            enemies[pathNum].pos -= 1; // Avance vers la porte (de 6 vers 1)
+                            enemies[pathNum].pos -= 1;
                         } else {
                             if(gateStatus[pathNum] === 'intact') {
                                 gateStatus[pathNum] = 'damaged';
@@ -500,7 +493,7 @@
             const logRef = ref(db, `rooms/${currentRoom}/logs`);
             const logSnap = await get(logRef);
             let logs = logSnap.val() || [];
-            logs.unshift(`Attaque des monstres [${d1} et ${d2}] ! Les lignes bougent.`);
+            logs.unshift(`Attaque des monstres [${d1} et ${d2}] chez les adversaires !`);
             await set(logRef, logs.slice(0, 20));
         };
 
@@ -510,7 +503,6 @@
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
 
-                // MAJ des valeurs de tourelles
                 if(roomData.turrets) {
                     for(let [tKey, val] of Object.entries(roomData.turrets)) {
                         const el = document.getElementById(`turret-val-${tKey}`);
@@ -518,7 +510,6 @@
                     }
                 }
 
-                // MAJ et rendu des plateaux de TOUS les joueurs
                 if(roomData.players) {
                     const container = document.getElementById('all-players-boards');
                     container.innerHTML = '';
@@ -530,12 +521,11 @@
                         let boardHTML = `
                             <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
                                 <div class="player-title">
-                                    <span>Chevalier : ${pName} ${isMe ? '(Vous)' : ''}</span>
+                                    <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : '(Adversaire)'}</span>
                                 </div>
                                 <div class="battlefield-container">
                         `;
 
-                        // Chemins de 6 à 1 (de gauche à droite sur l'affichage ou l'inverse)
                         for (let path = 6; path >= 1; path--) {
                             const status = pData.gateStatus?.[path] || 'intact';
                             let gateClass = '';
@@ -554,7 +544,6 @@
                                     <div class="cells-container">
                             `;
 
-                            // Cases de 6 (bas) vers 1 (haut)
                             for(let c = 6; c >= 1; c--) {
                                 let enemyTokenHTML = '';
                                 if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
@@ -571,7 +560,6 @@
                     }
                 }
 
-                // MAJ des logs
                 if(roomData.logs) {
                     const logsContainer = document.getElementById('game-logs');
                     logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
