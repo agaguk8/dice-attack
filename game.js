@@ -766,7 +766,15 @@ function renderBoards(players) {
                 let enemyTokenHTML = '';
                 if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
                     const enemy = pData.enemies[path];
-                    enemyTokenHTML = `<div class="enemy-token" title="PV: ${enemy.hp}">👹<span>${enemy.hp}pv</span></div>`;
+                    
+                    // Choix de l'icône selon le thème du joueur
+                    let monsterIcon = "👹";
+                    let theme = pData.theme || 'default';
+                    if (theme === 'vampire') monsterIcon = "🦇";
+                    else if (theme === 'toxic') monsterIcon = "☣️";
+                    else if (theme === 'fire') monsterIcon = "🔥";
+                
+                    enemyTokenHTML = `<div class="enemy-token" title="PV: ${enemy.hp}">${monsterIcon}<span>${enemy.hp}p</span></div>`;
                 }
 
                 let hitClass = '';
