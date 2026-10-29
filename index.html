@@ -362,7 +362,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V1.4</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V1.5</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -585,6 +585,13 @@
             });
         }
 
+        // Vérifie si toutes les tourelles d'un joueur sont au niveau maximum (6)
+        function areAllTurretsMax(myTurrets) {
+            if (!myTurrets) return false;
+            const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
+            return turretPairs.every(t => (myTurrets[t] || 1) >= 6);
+        }
+
         window.upgradeTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -596,14 +603,22 @@
                 return;
             }
 
+            let players = data.players || {};
+            let myData = players[playerName];
+            if(!myData || !myData.turrets) return;
+
+            // Si toutes les tourelles sont à 6, on saute l'étape d'amélioration
+            if (areAllTurretsMax(myData.turrets)) {
+                turnStep = 2;
+                updateTurnUI(data.activePlayer, myData.turrets);
+                alert("Toutes vos tourelles sont au niveau maximum ! Passez directement au tir.");
+                return;
+            }
+
             if(turnStep !== 1) {
                 alert("Vous avez déjà effectué votre amélioration ce tour-ci ! Passez au tir.");
                 return;
             }
-
-            let players = data.players || {};
-            let myData = players[playerName];
-            if(!myData || !myData.turrets) return;
 
             let val = myData.turrets[turretKey] || 1;
             if(val >= 6) {
@@ -639,7 +654,7 @@
             }
 
             if(turnStep !== 2) {
-                alert("Vous devez d'abord améliorer une tourelle !");
+                alert("Vous devez d'abord passer l'étape d'amélioration !");
                 return;
             }
 
@@ -647,20 +662,28 @@
             let myData = players[playerName];
             if(!myData || !myData.turrets) return;
 
-            const force = myData.turrets[turretKey] || 1;
+            let baseForce = myData.turrets[turretKey] || 1;
+            
+            // Si TOUTES les tourelles sont au max (6), le nombre de dés augmente de +1 à chaque tour du joueur !
+            let extraBonusDice = 0;
+            if (areAllTurretsMax(myData.turrets)) {
+                // On calcule le nombre de fois que ce joueur a joué (ou basé sur data.turnCount)
+                extraBonusDice = Math.floor(((data.turnCount || 1) - 1)); 
+                if (extraBonusDice < 0) extraBonusDice = 0;
+            }
+
+            const totalForce = baseForce + extraBonusDice;
             
             const parts = turretKey.split('_');
             const p1 = parseInt(parts[0], 10);
             const p2 = parseInt(parts[1], 10);
 
-            // Lancement des dés (chaque dé correspond directement à sa valeur sur les deux colonnes de la tourelle)
             let rolls = [];
-            for(let i=0; i<force; i++) {
+            for(let i=0; i<totalForce; i++) {
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
             lastHits = {};
-            // Les tirs touchent les DEUX colonnes sur la case exacte du résultat du dé
             [p1, p2].forEach(col => {
                 rolls.forEach(res => {
                     const key = `${col}-${res}`;
@@ -674,7 +697,6 @@
                         let enemy = myData.enemies[col];
                         if(enemy && enemy.pos === res) {
                             enemy.hp -= 1;
-                            // Si les PV tombent à 0 ou si c'est l'ennemi du chemin 1 (qui a 1 PV max), il retourne en bas (case 6)
                             if(enemy.hp <= 0 || col === 1) {
                                 enemy.pos = 6;
                                 enemy.hp = col;
@@ -685,7 +707,7 @@
             }
 
             let logs = data.logs || [];
-            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> Dés [${rolls.join(', ')} sur les colonnes ${p1} et ${p2}].`);
+            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force totale: ${totalForce}) -> Dés [${rolls.join(', ')} sur les colonnes ${p1} et ${p2}].`);
             
             await update(roomRef, { 
                 players: players,
@@ -705,7 +727,7 @@
             const data = snap.val();
 
             if(data.activePlayer !== playerName || turnStep !== 3) {
-                alert("Veuillez d'abord compléter l'amélioration et le tir !");
+                alert("Veuillez d'abord compléter le tir !");
                 return;
             }
 
@@ -763,6 +785,12 @@
 
             turnStep = 1;
             lastHits = {};
+
+            // Si le prochain joueur a toutes ses tourelles au max, on passe directement son étape 1 (Amélioration)
+            let nextPlayerData = players[nextPlayer];
+            if (nextPlayerData && areAllTurretsMax(nextPlayerData.turrets)) {
+                turnStep = 2;
+            }
 
             await update(roomRef, {
                 activePlayer: nextPlayer,
@@ -833,6 +861,13 @@
             let nextPlayer = playerNames[nextIndex];
 
             logs.unshift(`🤖 Le Robot ${robotName} a joué. Attaque : [${d1}, ${d2}]. Tour de ${nextPlayer}.`);
+
+            let nextPlayerData = players[nextPlayer];
+            if (nextPlayerData && areAllTurretsMax(nextPlayerData.turrets)) {
+                turnStep = 2;
+            } else {
+                turnStep = 1;
+            }
 
             await update(roomRef, {
                 activePlayer: nextPlayer,
@@ -913,6 +948,13 @@
             const btnFinish = document.getElementById('btn-finish-turn');
             const isMyTurn = (activePlayer === playerName);
 
+            const allMax = areAllTurretsMax(myTurrets);
+
+            // Si toutes les tourelles sont à 6 et qu'on était à l'étape 1, on saute directement à l'étape 2 (Tir)
+            if (isMyTurn && allMax && turnStep === 1) {
+                turnStep = 2;
+            }
+
             const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
 
             turretPairs.forEach(t => {
@@ -950,8 +992,13 @@
                     instructions.innerText = `Étape 1 : Cliquez sur "Améliorer" de votre choix.`;
                     btnFinish.disabled = true;
                 } else if(turnStep === 2) {
-                    banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 2 : Tirez avec une tourelle.`;
-                    instructions.innerText = `Étape 2 : Cliquez sur "Tirer" pour vous défendre.`;
+                    if (allMax) {
+                        banner.innerHTML = `🔥 TOUTES TOURELLES MAX ! Tirez avec un bonus de dés accru !`;
+                        instructions.innerText = `Toutes tourelles au max : vos dés augmentent à chaque tour ! Cliquez sur "Tirer".`;
+                    } else {
+                        banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 2 : Tirez avec une tourelle.`;
+                        instructions.innerText = `Étape 2 : Cliquez sur "Tirer" pour vous défendre.`;
+                    }
                     btnFinish.disabled = true;
                 } else {
                     banner.innerHTML = `⚔️ Défense effectuée ! Vous pouvez terminer votre tour.`;
