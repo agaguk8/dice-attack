@@ -161,6 +161,13 @@
             transition: all 0.2s;
         }
 
+        /* Tourelle récemment améliorée (illumination verte) */
+        .turret-card.just-upgraded {
+            border-color: #22c55e !important;
+            background: rgba(34, 197, 94, 0.15);
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+        }
+
         .action-buttons {
             display: flex;
             gap: 5px;
@@ -191,7 +198,6 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
         }
 
-        /* Votre plateau à gauche avec une bordure dorée prononcée et distincte */
         .player-board-wrapper.is-me {
             border: 3px solid var(--gold);
             background: linear-gradient(135deg, #1e293b 0%, #162032 100%);
@@ -205,6 +211,33 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        /* Affichage des tourelles intégrées dans chaque plateau */
+        .board-turrets-mini {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            background: #0f172a;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .mini-turret {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 4px;
+            font-size: 0.75rem;
+        }
+
+        .mini-turret.upgraded {
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
         }
 
         .battlefield-container {
@@ -364,7 +397,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V2.0</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -402,10 +435,10 @@
 
         <div class="turn-banner" id="turn-banner">En attente du tour...</div>
 
-        <!-- Vos tourelles personnelles -->
+        <!-- Vos tourelles principales de contrôle -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Plateaux (Votre plateau apparaît TOUJOURS en premier à gauche) -->
+        <!-- Plateaux (Votre plateau à gauche, suivi des autres) -->
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
@@ -498,7 +531,8 @@
                             gates: initialGates,
                             turrets: initialTurrets,
                             enemies: initialEnemies,
-                            lastHits: {}
+                            lastHits: {},
+                            lastUpgradedTurret: null
                         }
                     },
                     logs: [`Le chevalier ${playerName} a ouvert la salle d'attente.`]
@@ -515,7 +549,8 @@
                         gates: initialGates,
                         turrets: initialTurrets,
                         enemies: initialEnemies,
-                        lastHits: {}
+                        lastHits: {},
+                        lastUpgradedTurret: null
                     };
                     await update(ref(db, `rooms/${currentRoom}/players`), players);
                 }
@@ -551,7 +586,8 @@
                     gates: robotGates,
                     turrets: robotTurrets,
                     enemies: robotEnemies,
-                    lastHits: {}
+                    lastHits: {},
+                    lastUpgradedTurret: null
                 };
                 let logs = roomData.logs || [];
                 logs.unshift(`Le Robot automatique s'est joint à la table !`);
@@ -631,6 +667,7 @@
 
             val += 1;
             myData.turrets[turretKey] = val;
+            myData.lastUpgradedTurret = turretKey; // Marque cette tourelle comme récemment améliorée
 
             let logs = data.logs || [];
             logs.unshift(`${playerName} a renforcé sa tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
@@ -683,7 +720,6 @@
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
-            // Enregistrement des impacts pour synchronisation en temps réel sur le plateau du joueur
             let hits = {};
             [p1, p2].forEach(col => {
                 rolls.forEach(res => {
@@ -740,9 +776,10 @@
             let gameOver = false;
             let loserName = null;
 
-            // Réinitialisation des impacts des autres joueurs lors du changement de tour
+            // Réinitialisation des indicateurs temporaires (impacts et tourelle verte) pour tous au changement de tour
             for(let pName in players) {
                 players[pName].lastHits = {};
+                players[pName].lastUpgradedTurret = null;
             }
 
             for(let pName in players) {
@@ -823,6 +860,7 @@
 
             for(let pName in players) {
                 players[pName].lastHits = {};
+                players[pName].lastUpgradedTurret = null;
             }
 
             const d1 = Math.floor(Math.random() * 6) + 1;
@@ -926,9 +964,21 @@
         function processGameData(roomData) {
             if(roomData.players && roomData.players[playerName] && roomData.players[playerName].turrets) {
                 const myTurrets = roomData.players[playerName].turrets;
+                const lastUpgraded = roomData.players[playerName].lastUpgradedTurret;
+
                 for(let [tKey, val] of Object.entries(myTurrets)) {
                     const el = document.getElementById(`turret-val-${tKey}`);
                     if(el) el.innerText = val;
+
+                    // Ajout visuel du fond vert sur le panneau de contrôle principal
+                    const cardEl = document.getElementById(`turret-card-${tKey}`);
+                    if(cardEl) {
+                        if(lastUpgraded === tKey) {
+                            cardEl.classList.add('just-upgraded');
+                        } else {
+                            cardEl.classList.remove('just-upgraded');
+                        }
+                    }
                 }
             }
 
@@ -1025,7 +1075,6 @@
             const container = document.getElementById('all-players-boards');
             container.innerHTML = '';
 
-            // Tri pour forcer VOTRE plateau à apparaître en premier (à gauche)
             let playerNames = Object.keys(players);
             playerNames.sort((a, b) => {
                 if (a === playerName) return -1;
@@ -1036,12 +1085,30 @@
             playerNames.forEach(pName => {
                 const pData = players[pName];
                 const isMe = (pName === playerName);
+                const pTurrets = pData.turrets || { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
+                const lastUpgraded = pData.lastUpgradedTurret;
+
+                // Génération des tourelles intégrées dans le mini-barème de chaque plateau
+                let turretsMiniHTML = `<div class="board-turrets-mini">`;
+                const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
+                turretPairs.forEach(t => {
+                    const val = pTurrets[t] || 1;
+                    const isRecentlyUpgraded = (lastUpgraded === t);
+                    turretsMiniHTML += `
+                        <div class="mini-turret ${isRecentlyUpgraded ? 'upgraded' : ''}">
+                            <div style="font-size:0.6rem; color:#94a3b8;">${t.replace('_', '/')}</div>
+                            <div style="font-weight:bold; font-size:0.9rem;">${val}</div>
+                        </div>
+                    `;
+                });
+                turretsMiniHTML += `</div>`;
 
                 let boardHTML = `
                     <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
                         <div class="player-title">
                             <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : '(Adversaire)'}</span>
                         </div>
+                        ${turretsMiniHTML}
                         <div class="battlefield-container">
                 `;
 
@@ -1090,5 +1157,6 @@
             });
         }
     </script>
+    V2.0
 </body>
 </html>
