@@ -191,8 +191,10 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
         }
 
+        /* Votre plateau à gauche avec une bordure dorée prononcée et distincte */
         .player-board-wrapper.is-me {
-            border-color: var(--gold);
+            border: 3px solid var(--gold);
+            background: linear-gradient(135deg, #1e293b 0%, #162032 100%);
         }
 
         .player-title {
@@ -362,7 +364,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V1.5</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -400,9 +402,10 @@
 
         <div class="turn-banner" id="turn-banner">En attente du tour...</div>
 
-        <!-- Tourelles de gauche (5/6) à droite (1/2) -->
+        <!-- Vos tourelles personnelles -->
         <div class="turrets-bar" id="turrets-container"></div>
 
+        <!-- Plateaux (Votre plateau apparaît TOUJOURS en premier à gauche) -->
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
@@ -437,7 +440,6 @@
         let isListenerActive = false;
         
         let turnStep = 1; 
-        let lastHits = {}; 
 
         function switchScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -495,7 +497,8 @@
                         [playerName]: {
                             gates: initialGates,
                             turrets: initialTurrets,
-                            enemies: initialEnemies
+                            enemies: initialEnemies,
+                            lastHits: {}
                         }
                     },
                     logs: [`Le chevalier ${playerName} a ouvert la salle d'attente.`]
@@ -511,7 +514,8 @@
                     players[playerName] = {
                         gates: initialGates,
                         turrets: initialTurrets,
-                        enemies: initialEnemies
+                        enemies: initialEnemies,
+                        lastHits: {}
                     };
                     await update(ref(db, `rooms/${currentRoom}/players`), players);
                 }
@@ -546,7 +550,8 @@
                 players[robotName] = {
                     gates: robotGates,
                     turrets: robotTurrets,
-                    enemies: robotEnemies
+                    enemies: robotEnemies,
+                    lastHits: {}
                 };
                 let logs = roomData.logs || [];
                 logs.unshift(`Le Robot automatique s'est joint à la table !`);
@@ -585,7 +590,6 @@
             });
         }
 
-        // Vérifie si toutes les tourelles d'un joueur sont au niveau maximum (6)
         function areAllTurretsMax(myTurrets) {
             if (!myTurrets) return false;
             const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
@@ -607,7 +611,6 @@
             let myData = players[playerName];
             if(!myData || !myData.turrets) return;
 
-            // Si toutes les tourelles sont à 6, on saute l'étape d'amélioration
             if (areAllTurretsMax(myData.turrets)) {
                 turnStep = 2;
                 updateTurnUI(data.activePlayer, myData.turrets);
@@ -663,11 +666,8 @@
             if(!myData || !myData.turrets) return;
 
             let baseForce = myData.turrets[turretKey] || 1;
-            
-            // Si TOUTES les tourelles sont au max (6), le nombre de dés augmente de +1 à chaque tour du joueur !
             let extraBonusDice = 0;
             if (areAllTurretsMax(myData.turrets)) {
-                // On calcule le nombre de fois que ce joueur a joué (ou basé sur data.turnCount)
                 extraBonusDice = Math.floor(((data.turnCount || 1) - 1)); 
                 if (extraBonusDice < 0) extraBonusDice = 0;
             }
@@ -683,13 +683,15 @@
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
-            lastHits = {};
+            // Enregistrement des impacts pour synchronisation en temps réel sur le plateau du joueur
+            let hits = {};
             [p1, p2].forEach(col => {
                 rolls.forEach(res => {
                     const key = `${col}-${res}`;
-                    lastHits[key] = (lastHits[key] || 0) + 1;
+                    hits[key] = (hits[key] || 0) + 1;
                 });
             });
+            myData.lastHits = hits;
 
             if(myData && myData.enemies) {
                 [p1, p2].forEach(col => {
@@ -717,7 +719,6 @@
 
             turnStep = 3;
             updateTurnUI(data.activePlayer, myData.turrets);
-            renderBoards(players);
         };
 
         window.finishTurn = async function() {
@@ -738,6 +739,11 @@
             let players = data.players || {};
             let gameOver = false;
             let loserName = null;
+
+            // Réinitialisation des impacts des autres joueurs lors du changement de tour
+            for(let pName in players) {
+                players[pName].lastHits = {};
+            }
 
             for(let pName in players) {
                 if(pName === playerName) continue; 
@@ -784,9 +790,7 @@
             logs.unshift(`${playerName} a terminé son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
 
             turnStep = 1;
-            lastHits = {};
 
-            // Si le prochain joueur a toutes ses tourelles au max, on passe directement son étape 1 (Amélioration)
             let nextPlayerData = players[nextPlayer];
             if (nextPlayerData && areAllTurretsMax(nextPlayerData.turrets)) {
                 turnStep = 2;
@@ -816,6 +820,10 @@
             let players = data.players || {};
             let gameOver = false;
             let loserName = null;
+
+            for(let pName in players) {
+                players[pName].lastHits = {};
+            }
 
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
@@ -950,7 +958,6 @@
 
             const allMax = areAllTurretsMax(myTurrets);
 
-            // Si toutes les tourelles sont à 6 et qu'on était à l'étape 1, on saute directement à l'étape 2 (Tir)
             if (isMyTurn && allMax && turnStep === 1) {
                 turnStep = 2;
             }
@@ -1018,14 +1025,22 @@
             const container = document.getElementById('all-players-boards');
             container.innerHTML = '';
 
-            for(let pName in players) {
+            // Tri pour forcer VOTRE plateau à apparaître en premier (à gauche)
+            let playerNames = Object.keys(players);
+            playerNames.sort((a, b) => {
+                if (a === playerName) return -1;
+                if (b === playerName) return 1;
+                return 0;
+            });
+
+            playerNames.forEach(pName => {
                 const pData = players[pName];
                 const isMe = (pName === playerName);
 
                 let boardHTML = `
                     <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
                         <div class="player-title">
-                            <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : ''}</span>
+                            <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : '(Adversaire)'}</span>
                         </div>
                         <div class="battlefield-container">
                 `;
@@ -1056,13 +1071,11 @@
 
                         let hitClass = '';
                         let badgeHTML = '';
-                        if(isMe) {
-                            const hitKey = `${path}-${c}`;
-                            if(lastHits[hitKey]) {
-                                hitClass = 'hit-active';
-                                if(lastHits[hitKey] > 1) {
-                                    badgeHTML = `<div class="hit-badge">X${lastHits[hitKey]}</div>`;
-                                }
+                        const hitKey = `${path}-${c}`;
+                        if(pData.lastHits && pData.lastHits[hitKey]) {
+                            hitClass = 'hit-active';
+                            if(pData.lastHits[hitKey] > 1) {
+                                badgeHTML = `<div class="hit-badge">X${pData.lastHits[hitKey]}</div>`;
                             }
                         }
 
@@ -1074,7 +1087,7 @@
 
                 boardHTML += `</div></div>`;
                 container.innerHTML += boardHTML;
-            }
+            });
         }
     </script>
 </body>
