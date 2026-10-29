@@ -362,7 +362,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V1.3</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde V1.4</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -653,34 +653,39 @@
             const p1 = parseInt(parts[0], 10);
             const p2 = parseInt(parts[1], 10);
 
+            // Lancement des dés (chaque dé correspond directement à sa valeur sur les deux colonnes de la tourelle)
             let rolls = [];
             for(let i=0; i<force; i++) {
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
             lastHits = {};
-            rolls.forEach(res => {
-                const targetPath = Math.random() < 0.5 ? p1 : p2;
-                const key = `${targetPath}-${res}`;
-                lastHits[key] = (lastHits[key] || 0) + 1;
+            // Les tirs touchent les DEUX colonnes sur la case exacte du résultat du dé
+            [p1, p2].forEach(col => {
+                rolls.forEach(res => {
+                    const key = `${col}-${res}`;
+                    lastHits[key] = (lastHits[key] || 0) + 1;
+                });
             });
 
             if(myData && myData.enemies) {
-                rolls.forEach(res => {
-                    const targetPath = Math.random() < 0.5 ? p1 : p2;
-                    let enemy = myData.enemies[targetPath];
-                    if(enemy && enemy.pos === res) {
-                        enemy.hp -= 1;
-                        if(enemy.hp <= 0) {
-                            enemy.pos = 6;
-                            enemy.hp = targetPath;
+                [p1, p2].forEach(col => {
+                    rolls.forEach(res => {
+                        let enemy = myData.enemies[col];
+                        if(enemy && enemy.pos === res) {
+                            enemy.hp -= 1;
+                            // Si les PV tombent à 0 ou si c'est l'ennemi du chemin 1 (qui a 1 PV max), il retourne en bas (case 6)
+                            if(enemy.hp <= 0 || col === 1) {
+                                enemy.pos = 6;
+                                enemy.hp = col;
+                            }
                         }
-                    }
+                    });
                 });
             }
 
             let logs = data.logs || [];
-            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
+            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> Dés [${rolls.join(', ')} sur les colonnes ${p1} et ${p2}].`);
             
             await update(roomRef, { 
                 players: players,
