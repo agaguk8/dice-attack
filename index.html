@@ -141,7 +141,6 @@
             font-size: 1.05rem;
         }
 
-        /* Tourelles de gauche (5/6) à droite (1/2) */
         .turrets-bar {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -238,12 +237,20 @@
             margin-bottom: 10px;
             font-weight: bold;
             font-size: 0.75rem;
+            color: var(--gold);
+        }
+
+        .gate.damaged {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
         }
 
         .gate.broken {
             border-color: #ef4444;
-            background: rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.4);
             color: #ef4444;
+            text-decoration: line-through;
         }
 
         .cells-container {
@@ -355,7 +362,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde v1.1</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde 1.2</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -416,7 +423,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, get, update, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             databaseURL: "https://dice-attack-default-rtdb.firebaseio.com/"
@@ -444,8 +451,8 @@
         }
 
         window.joinLobby = async function() {
-            playerName = document.getElementById('player-name').value.trim();
-            currentRoom = document.getElementById('room-code').value.trim();
+            playerName = document.getElementById('player-name'].value.trim();
+            currentRoom = document.getElementById('room-code'].value.trim();
 
             if (!playerName || !currentRoom) {
                 alert("Veuillez entrer un nom et un code de salon.");
@@ -455,27 +462,50 @@
             const roomRef = ref(db, 'rooms/' + currentRoom);
             const snapshot = await get(roomRef);
 
+            // Vérification anti-inactivité de 5 minutes sur la room existante
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const now = Date.now();
+                const lastActivity = data.lastActivity || now;
+                if (now - lastActivity > 5 * 60 * 1000) {
+                    // Salon expiré (> 5 min), on le réinitialise
+                    await remove(roomRef);
+                }
+            }
+
+            const snapCheck = await get(roomRef);
+
             const initialEnemies = {};
             for(let i=1; i<=6; i++) {
                 initialEnemies[i] = { pos: 6, hp: i };
             }
 
-            if (!snapshot.exists()) {
+            // Portes initialisées avec leurs points de vie maximaux selon leur chemin (chemin 1 = 1 PV, chemin 6 = 6 PV)
+            const initialGates = {};
+            for(let i=1; i<=6; i++) {
+                initialGates[i] = i; 
+            }
+
+            // Tourelles individuelles initialisées à 1 pour chaque joueur
+            const initialTurrets = { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
+
+            if (!snapCheck.exists()) {
                 await set(roomRef, {
                     status: 'waiting',
                     creator: playerName,
                     turnCount: 1,
-                    turrets: { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 },
+                    lastActivity: Date.now(),
                     players: {
                         [playerName]: {
-                            gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                            gates: initialGates,
+                            turrets: initialTurrets,
                             enemies: initialEnemies
                         }
                     },
                     logs: [`Le chevalier ${playerName} a ouvert la salle d'attente.`]
                 });
             } else {
-                let data = snapshot.val();
+                let data = snapCheck.val();
                 if(data.status === 'playing') {
                     alert("Cette partie a déjà commencé !");
                     return;
@@ -483,7 +513,8 @@
                 let players = data.players || {};
                 if (!players[playerName]) {
                     players[playerName] = {
-                        gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                        gates: initialGates,
+                        turrets: initialTurrets,
                         enemies: initialEnemies
                     };
                     await update(ref(db, `rooms/${currentRoom}/players`), players);
@@ -510,22 +541,27 @@
             if(playerNames.length < 2) {
                 const robotName = "Robot_Arthur";
                 const robotEnemies = {};
+                const robotGates = {};
+                const robotTurrets = { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
                 for(let i=1; i<=6; i++) {
                     robotEnemies[i] = { pos: 6, hp: i };
+                    robotGates[i] = i;
                 }
                 players[robotName] = {
-                    gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                    gates: robotGates,
+                    turrets: robotTurrets,
                     enemies: robotEnemies
                 };
                 let logs = roomData.logs || [];
                 logs.unshift(`Le Robot automatique s'est joint à la table !`);
-                await update(ref(db, `rooms/${currentRoom}`), { players, logs });
+                await update(ref(db, `rooms/${currentRoom}`), { players, logs, lastActivity: Date.now() });
                 playerNames.push(robotName);
             }
 
             await update(roomRef, {
                 status: 'playing',
-                activePlayer: playerNames[0]
+                activePlayer: playerNames[0],
+                lastActivity: Date.now()
             });
         };
 
@@ -536,7 +572,6 @@
         function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            // Ordre de gauche à droite : 5/6, 4/5, 3/4, 2/3, 1/2
             const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
             
             turretPairs.forEach(t => {
@@ -554,7 +589,7 @@
             });
         }
 
-        // ÉTAPE 1 : Amélioration obligatoire
+        // ÉTAPE 1 : Amélioration obligatoire INDIVIDUELLE (Max 6, devient grisé)
         window.upgradeTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -571,24 +606,33 @@
                 return;
             }
 
-            let turrets = data.turrets || {};
-            let val = turrets[turretKey] || 1;
-            val = val >= 6 ? 1 : val + 1;
-            turrets[turretKey] = val;
+            let players = data.players || {};
+            let myData = players[playerName];
+            if(!myData || !myData.turrets) return;
+
+            let val = myData.turrets[turretKey] || 1;
+            if(val >= 6) {
+                alert("Cette tourelle est déjà au niveau maximum (6) !");
+                return;
+            }
+
+            val += 1;
+            myData.turrets[turretKey] = val;
 
             let logs = data.logs || [];
-            logs.unshift(`${playerName} a renforcé la tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
+            logs.unshift(`${playerName} a renforcé sa tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
 
             await update(roomRef, {
-                turrets: turrets,
+                players: players,
+                lastActivity: Date.now(),
                 logs: logs.slice(0, 20)
             });
 
             turnStep = 2;
-            updateTurnUI(data.activePlayer);
+            updateTurnUI(data.activePlayer, myData.turrets);
         };
 
-        // ÉTAPE 2 : Tir de défense avec correction du ciblage sur les 2 colonnes
+        // ÉTAPE 2 : Tir de défense INDIVIDUEL (Utilise la force de la tourelle individuelle du joueur)
         window.fireTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -605,10 +649,12 @@
                 return;
             }
 
-            let turrets = data.turrets || {};
-            const force = turrets[turretKey] || 1;
+            let players = data.players || {};
+            let myData = players[playerName];
+            if(!myData || !myData.turrets) return;
+
+            const force = myData.turrets[turretKey] || 1;
             
-            // Correction du split pour récupérer correctement les 2 chemins (ex: '3_2' -> p1 = 3, p2 = 2)
             const parts = turretKey.split('_');
             const p1 = parseInt(parts[0], 10);
             const p2 = parseInt(parts[1], 10);
@@ -625,9 +671,6 @@
                 lastHits[key] = (lastHits[key] || 0) + 1;
             });
 
-            // Application des dégâts sur VOTRE propre plateau
-            let players = data.players || {};
-            let myData = players[playerName];
             if(myData && myData.enemies) {
                 rolls.forEach(res => {
                     const targetPath = Math.random() < 0.5 ? p1 : p2;
@@ -643,19 +686,20 @@
             }
 
             let logs = data.logs || [];
-            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
+            logs.unshift(`${playerName} a tiré avec sa tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
             
             await update(roomRef, { 
                 players: players,
+                lastActivity: Date.now(),
                 logs: logs.slice(0, 20) 
             });
 
             turnStep = 3;
-            updateTurnUI(data.activePlayer);
+            updateTurnUI(data.activePlayer, myData.turrets);
             renderBoards(players);
         };
 
-        // ÉTAPE 3 : Terminer le tour (Déclenche l'attaque ennemie chez les adversaires)
+        // ÉTAPE 3 : Terminer le tour (Vérifie les conditions de défaite/victoire et fait avancer les ennemis chez les adversaires)
         window.finishTurn = async function() {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -672,7 +716,8 @@
             document.getElementById('dice-result').innerText = `Dés d'attaque : [${d1}] et [${d2}]`;
 
             let players = data.players || {};
-            let playerNames = Object.keys(players);
+            let gameOver = false;
+            let loserName = null;
 
             // Avancée des ennemis sur les plateaux des adversaires
             for(let pName in players) {
@@ -680,37 +725,58 @@
 
                 let pData = players[pName];
                 let enemies = pData.enemies;
-                let gateStatus = pData.gateStatus;
+                let gates = pData.gates;
 
                 [d1, d2].forEach(pathNum => {
                     if(enemies[pathNum]) {
                         if(enemies[pathNum].pos > 1) {
                             enemies[pathNum].pos -= 1;
                         } else {
-                            if(gateStatus[pathNum] === 'intact') {
-                                gateStatus[pathNum] = 'damaged';
-                            } else if(gateStatus[pathNum] === 'damaged') {
-                                gateStatus[pathNum] = 'broken';
+                            // L'ennemi tente de traverser la porte (pos === 1)
+                            if(gates[pathNum] > 0) {
+                                gates[pathNum] -= 1; // Perds 1 PV de porte
+                            } else {
+                                // Porte déjà à 0 PV (brisée), l'ennemi traverse ! Le joueur perd la partie.
+                                gameOver = true;
+                                loserName = pName;
                             }
                         }
                     }
                 });
             }
 
+            let logs = data.logs || [];
+
+            if(gameOver) {
+                logs.unshift(`🚨 ALERTE ROUGE ! La porte du chevalier ${loserName} a été franchie par un monstre ! ${loserName} a perdu la partie. Victoire des autres chevaliers !`);
+                await update(roomRef, {
+                    status: 'gameover',
+                    loser: loserName,
+                    players: players,
+                    lastActivity: Date.now(),
+                    logs: logs.slice(0, 20)
+                });
+                return;
+            }
+
+            let playerNames = Object.keys(players);
             let currentIndex = playerNames.indexOf(playerName);
             let nextIndex = (currentIndex + 1) % playerNames.length;
             let nextPlayer = playerNames[nextIndex];
 
-            let logs = data.logs || [];
             logs.unshift(`${playerName} a terminé son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
 
             turnStep = 1;
             lastHits = {};
 
+            let nextPlayerData = players[nextPlayer];
+            let nextTurrets = nextPlayerData ? nextPlayerData.turrets : { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
+
             await update(roomRef, {
                 activePlayer: nextPlayer,
                 turnCount: (data.turnCount || 1) + 1,
                 players: players,
+                lastActivity: Date.now(),
                 logs: logs.slice(0, 20)
             });
 
@@ -728,7 +794,8 @@
             if(!robotName || !robotName.startsWith("Robot_")) return;
 
             let players = data.players || {};
-            let playerNames = Object.keys(players);
+            let gameOver = false;
+            let loserName = null;
 
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
@@ -737,29 +804,49 @@
                 if(pName === robotName) continue;
                 let pData = players[pName];
                 let enemies = pData.enemies;
-                let gateStatus = pData.gateStatus;
+                let gates = pData.gates;
 
                 [d1, d2].forEach(pathNum => {
-                    if(enemies[pathNum] && enemies[pathNum].pos > 1) {
-                        enemies[pathNum].pos -= 1;
-                    } else if(enemies[pathNum] && enemies[pathNum].pos === 1) {
-                        if(gateStatus[pathNum] === 'intact') gateStatus[pathNum] = 'damaged';
-                        else if(gateStatus[pathNum] === 'damaged') gateStatus[pathNum] = 'broken';
+                    if(enemies[pathNum]) {
+                        if(enemies[pathNum].pos > 1) {
+                            enemies[pathNum].pos -= 1;
+                        } else {
+                            if(gates[pathNum] > 0) {
+                                gates[pathNum] -= 1;
+                            } else {
+                                gameOver = true;
+                                loserName = pName;
+                            }
+                        }
                     }
                 });
             }
 
+            let logs = data.logs || [];
+            if(gameOver) {
+                logs.unshift(`🚨 Le Robot a provoqué la chute de la porte de ${loserName}. ${loserName} a perdu !`);
+                await update(roomRef, {
+                    status: 'gameover',
+                    loser: loserName,
+                    players: players,
+                    lastActivity: Date.now(),
+                    logs: logs.slice(0, 20)
+                });
+                return;
+            }
+
+            let playerNames = Object.keys(players);
             let currentIndex = playerNames.indexOf(robotName);
             let nextIndex = (currentIndex + 1) % playerNames.length;
             let nextPlayer = playerNames[nextIndex];
 
-            let logs = data.logs || [];
             logs.unshift(`🤖 Le Robot ${robotName} a joué. Attaque : [${d1}, ${d2}]. Tour de ${nextPlayer}.`);
 
             await update(roomRef, {
                 activePlayer: nextPlayer,
                 turnCount: (data.turnCount || 1) + 1,
                 players: players,
+                lastActivity: Date.now(),
                 logs: logs.slice(0, 20)
             });
 
@@ -774,7 +861,15 @@
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
 
-                if(roomData.status === 'playing') {
+                // Vérification inactivité de plus de 5 minutes
+                if (roomData.lastActivity && (Date.now() - roomData.lastActivity > 5 * 60 * 1000)) {
+                    remove(roomRef);
+                    alert("Le salon a été réinitialisé en raison d'une inactivité de plus de 5 minutes.");
+                    location.reload();
+                    return;
+                }
+
+                if(roomData.status === 'playing' || roomData.status === 'gameover') {
                     switchScreen('game-screen');
                     document.getElementById('display-room').innerText = currentRoom;
                     document.getElementById('display-player').innerText = playerName;
@@ -795,14 +890,24 @@
         }
 
         function processGameData(roomData) {
-            if(roomData.turrets) {
-                for(let [tKey, val] of Object.entries(roomData.turrets)) {
+            // Affichage des valeurs des tourelles INDIVIDUELLES du joueur connecté
+            if(roomData.players && roomData.players[playerName] && roomData.players[playerName].turrets) {
+                const myTurrets = roomData.players[playerName].turrets;
+                for(let [tKey, val] of Object.entries(myTurrets)) {
                     const el = document.getElementById(`turret-val-${tKey}`);
                     if(el) el.innerText = val;
                 }
             }
 
-            updateTurnUI(roomData.activePlayer);
+            if(roomData.status === 'gameover') {
+                const banner = document.getElementById('turn-banner');
+                banner.innerHTML = `💀 FIN DE PARTIE - Le chevalier <strong>${roomData.loser}</strong> a perdu ! Les autres gagnent !`;
+                banner.style.borderColor = "#ef4444";
+                document.getElementById('btn-finish-turn').disabled = true;
+            } else {
+                updateTurnUI(roomData.activePlayer, roomData.players?.[playerName]?.turrets);
+            }
+
             if(roomData.players) {
                 renderBoards(roomData.players);
             }
@@ -812,7 +917,7 @@
             }
         }
 
-        function updateTurnUI(activePlayer) {
+        function updateTurnUI(activePlayer, myTurrets) {
             const banner = document.getElementById('turn-banner');
             const instructions = document.getElementById('turn-instructions');
             const btnFinish = document.getElementById('btn-finish-turn');
@@ -825,8 +930,17 @@
                 const btnFire = document.getElementById(`btn-fire-${t}`);
 
                 if(isMyTurn) {
+                    const currentVal = myTurrets ? (myTurrets[t] || 1) : 1;
+
                     if(turnStep === 1) {
-                        btnUp.disabled = false;
+                        // Si la tourelle est au max (6), le bouton améliorer est grisé/désactivé
+                        if(currentVal >= 6) {
+                            btnUp.disabled = true;
+                            btnUp.innerText = "MAX (6)";
+                        } else {
+                            btnUp.disabled = false;
+                            btnUp.innerText = "Améliorer";
+                        }
                         btnFire.disabled = true;
                     } else if(turnStep === 2) {
                         btnUp.disabled = true;
@@ -844,7 +958,7 @@
             if(isMyTurn) {
                 if(turnStep === 1) {
                     banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 1 : Améliorez une tourelle.`;
-                    instructions.innerText = `Étape 1 : Cliquez sur "Améliorer" d'une tourelle.`;
+                    instructions.innerText = `Étape 1 : Cliquez sur "Améliorer" de votre choix.`;
                     btnFinish.disabled = true;
                 } else if(turnStep === 2) {
                     banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 2 : Tirez avec une tourelle.`;
@@ -881,15 +995,14 @@
                 `;
 
                 for (let path = 6; path >= 1; path--) {
-                    const status = pData.gateStatus?.[path] || 'intact';
+                    const gatePv = pData.gates?.[path] !== undefined ? pData.gates[path] : path;
                     let gateClass = '';
-                    let gateText = `Porte ${path}<br>(${path} PV)`;
-                    if(status === 'damaged') {
+                    let gateText = `Porte ${path}<br><span style="color:${gatePv === 0 ? '#ef4444' : (gatePv < path ? '#f9a825' : 'var(--gold)}')}; font-weight:bold;">${gatePv} PV</span>`;
+                    
+                    if(gatePv === 0) {
                         gateClass = 'broken';
-                        gateText = `Porte ${path}<br>Endommagée`;
-                    } else if(status === 'broken') {
-                        gateClass = 'broken';
-                        gateText = `Porte ${path}<br>BRISÉE`;
+                    } else if(gatePv < path) {
+                        gateClass = 'damaged';
                     }
 
                     boardHTML += `
