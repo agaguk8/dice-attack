@@ -92,8 +92,14 @@
             text-transform: uppercase;
         }
 
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             background: #e6c547;
+        }
+
+        .btn:disabled {
+            background: #475569;
+            color: #94a3b8;
+            cursor: not-allowed;
         }
 
         #game-screen {
@@ -111,6 +117,17 @@
             border-radius: 10px;
             border: 1px solid var(--border-color);
             margin-bottom: 20px;
+        }
+
+        .turn-banner {
+            background: rgba(212, 175, 55, 0.15);
+            border: 1px solid var(--gold);
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: var(--gold);
         }
 
         .turrets-bar {
@@ -230,7 +247,6 @@
             font-weight: bold;
             font-size: 0.85rem;
             position: relative;
-            transition: all 0.2s;
         }
 
         .cell.hit-active {
@@ -307,22 +323,25 @@
             <button class="btn" style="width: auto; margin-top: 0; padding: 6px 12px; background: #ef4444; color: white;" onclick="leaveGame()">Quitter</button>
         </div>
 
-        <!-- Tourelles de droite (1/2) à gauche (5/6) -->
+        <div class="turn-banner" id="turn-banner">Chargement du tour...</div>
+
+        <!-- Tourelles communes du salon -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Plateau multi-joueurs -->
+        <!-- Plateaux -->
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
             <div class="panel-box">
-                <h3>Actions de Combat</h3>
-                <button class="btn" onclick="triggerAttackPhase()">Lancer l'Attaque (Fait avancer les ennemis chez les ADVERSAIRES)</button>
+                <h3>Actions de votre Tour</h3>
+                <button class="btn" id="btn-action" onclick="executeTurnAction()">Terminer mon tour & Lancer l'attaque</button>
+                <button class="btn" style="background:#475569; margin-top:5px;" onclick="resetGameRoom()">Réinitialiser le Salon</button>
                 <div id="dice-result" style="margin-top: 10px; font-weight: bold; color: var(--gold);"></div>
             </div>
             <div class="panel-box">
                 <h3>Journal des Batailles</h3>
                 <div class="log-box" id="game-logs">
-                    <div>En attente des actions...</div>
+                    <div>En attente...</div>
                 </div>
             </div>
         </div>
@@ -356,7 +375,8 @@
 
             if (!snapshot.exists()) {
                 await set(roomRef, {
-                    creator: playerName,
+                    activePlayer: playerName,
+                    turnCount: 1,
                     turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
                     players: {
                         [playerName]: {
@@ -367,16 +387,21 @@
                             }
                         }
                     },
-                    logs: [`Le chevalier ${playerName} a ouvert la lice.`]
+                    logs: [`Le chevalier ${playerName} a créé la lice.`]
                 });
             } else {
-                await update(ref(db, `rooms/${currentRoom}/players/${playerName}`), {
-                    gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
-                    enemies: {
-                        1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
-                        4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
-                    }
-                });
+                const roomData = snapshot.val();
+                let players = roomData.players || {};
+                if (!players[playerName]) {
+                    players[playerName] = {
+                        gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                        enemies: {
+                            1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
+                            4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
+                        }
+                    };
+                    await update(ref(db, `rooms/${currentRoom}/players`), players);
+                }
             }
 
             document.getElementById('lobby-screen').style.display = 'none';
@@ -395,7 +420,6 @@
         function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            // Ordre inversé : 1/2 à droite, jusqu'à 5/6 à gauche
             const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
             
             turretPairs.forEach(t => {
@@ -404,7 +428,7 @@
                     <div class="turret-card" onclick="upgradeTurret('${t}')">
                         <div style="font-size: 0.8rem; font-weight: bold; color: var(--gold);">Tourelle ${labelName}</div>
                         <div style="font-size: 1.1rem; margin: 3px 0;" id="turret-val-${t}">1</div>
-                        <div style="font-size: 0.65rem; color: #94a3b8;">[Dessus: 1 | Avant: 3]</div>
+                        <div style="font-size: 0.65rem; color: #94a3b8;">Cliquer pour améliorer (+1)</div>
                         <button class="btn" style="padding: 3px 6px; font-size: 0.7rem; margin-top: 4px;" onclick="fireTurret(event, '${t}')">Tirer</button>
                     </div>
                 `;
@@ -412,23 +436,39 @@
         }
 
         window.upgradeTurret = async function(turretKey) {
-            const turretRef = ref(db, `rooms/${currentRoom}/turrets/${turretKey}`);
-            const snap = await get(turretRef);
-            let val = snap.val() || 1;
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snap = await get(roomRef);
+            if(!snap.exists()) return;
+            const data = snap.val();
+
+            // Vérification stricte du tour
+            if(data.activePlayer !== playerName) {
+                alert("Ce n'est pas votre tour de jouer !");
+                return;
+            }
+
+            let turrets = data.turrets || {};
+            let val = turrets[turretKey] || 1;
             val = val >= 6 ? 1 : val + 1;
-            await set(turretRef, val);
-            
-            const logRef = ref(db, `rooms/${currentRoom}/logs`);
-            const logSnap = await get(logRef);
-            let logs = logSnap.val() || [];
-            logs.unshift(`${playerName} a renforcé la tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
-            await set(logRef, logs.slice(0, 20));
+            turrets[turretKey] = val;
+
+            await update(ref(db, `rooms/${currentRoom}`), { turrets });
         };
 
         window.fireTurret = async function(event, turretKey) {
             event.stopPropagation();
-            const turretSnap = await get(ref(db, `rooms/${currentRoom}/turrets/${turretKey}`));
-            const force = turretSnap.val() || 1;
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snap = await get(roomRef);
+            if(!snap.exists()) return;
+            const data = snap.val();
+
+            if(data.activePlayer !== playerName) {
+                alert("Ce n'est pas votre tour de tirer !");
+                return;
+            }
+
+            let turrets = data.turrets || {};
+            const force = turrets[turretKey] || 1;
 
             const [p1, p2] = turretKey.split('_').map(Number);
             let rolls = [];
@@ -436,6 +476,7 @@
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
+            // Animation visuelle locale
             rolls.forEach(res => {
                 const targetPath = Math.random() < 0.5 ? p1 : p2;
                 const cellEl = document.getElementById(`cell-${playerName}-${targetPath}-${res}`);
@@ -445,29 +486,33 @@
                 }
             });
 
-            const logRef = ref(db, `rooms/${currentRoom}/logs`);
-            const logSnap = await get(logRef);
-            let logs = logSnap.val() || [];
-            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> Résultats: [${rolls.join(', ')}].`);
-            await set(logRef, logs.slice(0, 20));
+            let logs = data.logs || [];
+            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
+            await update(ref(db, `rooms/${currentRoom}`), { logs: logs.slice(0, 20) });
         };
 
-        window.triggerAttackPhase = async function() {
-            const d1 = Math.floor(Math.random() * 6) + 1;
-            const d2 = Math.floor(Math.random() * 6) + 1;
-
-            document.getElementById('dice-result').innerText = `Dés d'attaque : [${d1}] et [${d2}]`;
-
+        // Fin de tour : fait avancer les ennemis UNIQUEMENT sur le plateau des ADVERSAIRES et passe au joueur suivant
+        window.executeTurnAction = async function() {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
             if(!snap.exists()) return;
+            const data = snap.val();
 
-            let roomData = snap.val();
-            let players = roomData.players || {};
+            if(data.activePlayer !== playerName) {
+                alert("Ce n'est pas votre tour !");
+                return;
+            }
 
-            // Avancée des ennemis EXCLUSIVEMENT sur les plateaux des ADVERSAIRES
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+            document.getElementById('dice-result').innerText = `Dés d'attaque : [${d1}] et [${d2}]`;
+
+            let players = data.players || {};
+            let playerNames = Object.keys(players);
+
+            // Avancée des ennemis sur les plateaux adverses
             for(let pName in players) {
-                if (pName === playerName) continue; // Ignore le joueur actuel
+                if(pName === playerName) continue; // Ne touche pas à son propre plateau
 
                 let pData = players[pName];
                 let enemies = pData.enemies;
@@ -488,13 +533,48 @@
                 });
             }
 
-            await update(ref(db, `rooms/${currentRoom}/players`), players);
+            // Rotation du tour de jeu entre les joueurs connectés
+            let currentIndex = playerNames.indexOf(playerName);
+            let nextIndex = (currentIndex + 1) % playerNames.length;
+            let nextPlayer = playerNames[nextIndex];
 
-            const logRef = ref(db, `rooms/${currentRoom}/logs`);
-            const logSnap = await get(logRef);
-            let logs = logSnap.val() || [];
-            logs.unshift(`Attaque des monstres [${d1} et ${d2}] chez les adversaires !`);
-            await set(logRef, logs.slice(0, 20));
+            let logs = data.logs || [];
+            logs.unshift(`${playerName} a fini son tour. Attaque ennemie [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
+
+            await update(ref(db, `rooms/${currentRoom}`), {
+                activePlayer: nextPlayer,
+                turnCount: (data.turnCount || 1) + 1,
+                players: players,
+                logs: logs.slice(0, 20)
+            });
+        };
+
+        window.resetGameRoom = async function() {
+            if(!confirm("Voulez-vous vraiment réinitialiser toute la partie ?")) return;
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snap = await get(roomRef);
+            if(!snap.exists()) return;
+            const data = snap.val();
+            let playerNames = Object.keys(data.players || {});
+
+            let initialPlayers = {};
+            playerNames.forEach(pName => {
+                initialPlayers[pName] = {
+                    gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
+                    enemies: {
+                        1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
+                        4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
+                    }
+                };
+            });
+
+            await set(roomRef, {
+                activePlayer: playerNames[0] || playerName,
+                turnCount: 1,
+                turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
+                players: initialPlayers,
+                logs: [`La partie a été réinitialisée par ${playerName}.`]
+            });
         };
 
         function listenToRoom() {
@@ -503,6 +583,7 @@
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
 
+                // MAJ Tourelles
                 if(roomData.turrets) {
                     for(let [tKey, val] of Object.entries(roomData.turrets)) {
                         const el = document.getElementById(`turret-val-${tKey}`);
@@ -510,6 +591,22 @@
                     }
                 }
 
+                // Banner de tour
+                const banner = document.getElementById('turn-banner');
+                const btnAction = document.getElementById('btn-action');
+                const isMyTurn = (roomData.activePlayer === playerName);
+
+                if(isMyTurn) {
+                    banner.innerHTML = `⚔️ C'EST À VOUS DE JOUER ! (Tour ${roomData.turnCount || 1})`;
+                    banner.style.borderColor = "var(--gold)";
+                    btnAction.disabled = false;
+                } else {
+                    banner.innerHTML = `⏳ Tour de <strong>${roomData.activePlayer}</strong> (Tour ${roomData.turnCount || 1})`;
+                    banner.style.borderColor = "#475569";
+                    btnAction.disabled = true;
+                }
+
+                // Rendu des plateaux
                 if(roomData.players) {
                     const container = document.getElementById('all-players-boards');
                     container.innerHTML = '';
@@ -560,6 +657,7 @@
                     }
                 }
 
+                // Logs
                 if(roomData.logs) {
                     const logsContainer = document.getElementById('game-logs');
                     logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
