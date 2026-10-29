@@ -141,6 +141,7 @@
             font-size: 1.05rem;
         }
 
+        /* Tourelles de droite à gauche : 1/2 jusqu'à 5/6 */
         .turrets-bar {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -159,11 +160,6 @@
             border-radius: 8px;
             padding: 10px;
             transition: all 0.2s;
-        }
-
-        .turret-card.active-action {
-            border-color: var(--gold);
-            box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
         }
 
         .action-buttons {
@@ -272,11 +268,31 @@
             position: relative;
         }
 
+        /* Style visuel des impacts de tirs avec multiplicateurs X2, X3... */
         .cell.hit-active {
-            background: #ef4444 !important;
+            background: #2563eb !important;
             color: white;
+            border-color: #60a5fa;
             transform: scale(1.1);
-            box-shadow: 0 0 10px #ef4444;
+            box-shadow: 0 0 12px #3b82f6;
+        }
+
+        .hit-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #ef4444;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 0.65rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            border: 1px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }
 
         .enemy-token {
@@ -376,16 +392,16 @@
 
         <div class="turn-banner" id="turn-banner">En attente du tour...</div>
 
-        <!-- Tourelles (Une seule action autorisée par tour : soit Améliorer, soit Tirer) -->
+        <!-- Tourelles de droite (1/2) à gauche (5/6) -->
         <div class="turrets-bar" id="turrets-container"></div>
 
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
             <div class="panel-box">
-                <h3>Actions de votre Tour</h3>
-                <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px;">Règle : 1 seule action de tourelle par tour, puis terminez votre tour.</div>
-                <button class="btn" id="btn-action" onclick="finishTurn()">Terminer mon tour (Attaque des monstres)</button>
+                <h3>Séquence de Tour</h3>
+                <div id="turn-instructions" style="font-size: 0.85rem; color: var(--gold); margin-bottom: 10px;">Étape 1 : Améliorez une tourelle.</div>
+                <button class="btn" id="btn-finish-turn" onclick="finishTurn()" disabled>Terminer mon tour (Attaque des monstres)</button>
                 <div id="dice-result" style="margin-top: 10px; font-weight: bold; color: var(--gold);"></div>
             </div>
             <div class="panel-box">
@@ -411,6 +427,10 @@
         let currentRoom = null;
         let playerName = null;
         let isListenerActive = false;
+        
+        // État local du tour pour gérer la séquence (1: Amélioration obligatoire, 2: Tir obligatoire, 3: Terminer)
+        let turnStep = 1; 
+        let lastHits = {}; // Stocke les impacts de tirs pour l'affichage local
 
         function switchScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -505,8 +525,7 @@
 
             await update(roomRef, {
                 status: 'playing',
-                activePlayer: playerNames[0],
-                hasActed: false
+                activePlayer: playerNames[0]
             });
         };
 
@@ -517,6 +536,7 @@
         function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
+            // Ordre inversé demandé : de droite à gauche (1/2, 2/3, 3/4, 4/5, 5/6)
             const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
             
             turretPairs.forEach(t => {
@@ -526,16 +546,16 @@
                         <div style="font-size: 0.8rem; font-weight: bold; color: var(--gold);">Tourelle ${labelName}</div>
                         <div style="font-size: 1.1rem; margin: 3px 0;" id="turret-val-${t}">1</div>
                         <div class="action-buttons">
-                            <button class="btn" onclick="doTurretAction('${t}', 'upgrade')">Améliorer</button>
-                            <button class="btn" onclick="doTurretAction('${t}', 'fire')">Tirer</button>
+                            <button class="btn" id="btn-up-${t}" onclick="upgradeTurret('${t}')">Améliorer</button>
+                            <button class="btn" id="btn-fire-${t}" onclick="fireTurret('${t}')" disabled>Tirer</button>
                         </div>
                     </div>
                 `;
             });
         }
 
-        // Action unique par tour (Améliorer OU Tirer)
-        window.doTurretAction = async function(turretKey, actionType) {
+        // ÉTAPE 1 : Amélioration obligatoire
+        window.upgradeTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
             if(!snap.exists()) return;
@@ -546,56 +566,82 @@
                 return;
             }
 
-            if(data.hasActed) {
-                alert("Vous avez déjà effectué votre action de tourelle ce tour-ci ! Terminez votre tour.");
+            if(turnStep !== 1) {
+                alert("Vous avez déjà effectué votre amélioration ce tour-ci ! Passez au tir.");
                 return;
             }
 
             let turrets = data.turrets || {};
+            let val = turrets[turretKey] || 1;
+            val = val >= 6 ? 1 : val + 1;
+            turrets[turretKey] = val;
+
             let logs = data.logs || [];
+            logs.unshift(`${playerName} a renforcé la tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
 
-            if(actionType === 'upgrade') {
-                let val = turrets[turretKey] || 1;
-                val = val >= 6 ? 1 : val + 1;
-                turrets[turretKey] = val;
-                logs.unshift(`${playerName} a renforcé la tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
-            } else if(actionType === 'fire') {
-                const force = turrets[turretKey] || 1;
-                const [p1, p2] = turretKey.split('_').map(Number);
-                let rolls = [];
-                for(let i=0; i<force; i++) {
-                    rolls.push(Math.floor(Math.random() * 6) + 1);
-                }
-
-                rolls.forEach(res => {
-                    const targetPath = Math.random() < 0.5 ? p1 : p2;
-                    const cellEl = document.getElementById(`cell-${playerName}-${targetPath}-${res}`);
-                    if(cellEl) {
-                        cellEl.classList.add('hit-active');
-                        setTimeout(() => cellEl.classList.remove('hit-active'), 800);
-                    }
-                });
-
-                logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
-            }
-
-            // Marque le joueur comme ayant agi (bloque d'autres actions de tourelle ce tour-ci)
             await update(roomRef, {
                 turrets: turrets,
-                hasActed: true,
                 logs: logs.slice(0, 20)
             });
+
+            // Passage à l'étape 2 : Le tir
+            turnStep = 2;
+            updateTurnUI(data.activePlayer);
         };
 
-        // Terminer son tour : déclenche l'attaque ennemie chez les adversaires et passe au joueur suivant
-        window.finishTurn = async function() {
+        // ÉTAPE 2 : Tir de défense
+        window.fireTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
             if(!snap.exists()) return;
             const data = snap.val();
 
             if(data.activePlayer !== playerName) {
-                alert("Ce n'est pas votre tour !");
+                alert("Ce n'est pas votre tour de tirer !");
+                return;
+            }
+
+            if(turnStep !== 2) {
+                alert("Vous devez d'abord améliorer une tourelle !");
+                return;
+            }
+
+            let turrets = data.turrets || {};
+            const force = turrets[turretKey] || 1;
+            const [p1, p2] = turretKey.split('_').map(Number);
+            let rolls = [];
+            for(let i=0; i<force; i++) {
+                rolls.push(Math.floor(Math.random() * 6) + 1);
+            }
+
+            // Calcul des impacts pour affichage avec multiplicateurs X2, X3...
+            lastHits = {};
+            rolls.forEach(res => {
+                const targetPath = Math.random() < 0.5 ? p1 : p2;
+                const key = `${targetPath}-${res}`;
+                lastHits[key] = (lastHits[key] || 0) + 1;
+            });
+
+            let logs = data.logs || [];
+            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
+            
+            await update(roomRef, { logs: logs.slice(0, 20) });
+
+            // Passage à l'étape 3 : Terminer le tour
+            turnStep = 3;
+            updateTurnUI(data.activePlayer);
+            renderBoards(data.players);
+        };
+
+        // ÉTAPE 3 : Terminer le tour (Déclenche l'attaque ennemie chez les adversaires)
+        window.finishTurn = async function() {
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snap = await get(roomRef);
+            if(!snap.exists()) return;
+            const data = snap.val();
+
+            if(data.activePlayer !== playerName || turnStep !== 3) {
+                alert("Veuillez d'abord compléter l'amélioration et le tir !");
                 return;
             }
 
@@ -636,10 +682,13 @@
             let logs = data.logs || [];
             logs.unshift(`${playerName} a terminé son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
 
+            // Réinitialise l'état local du tour
+            turnStep = 1;
+            lastHits = {};
+
             await update(roomRef, {
                 activePlayer: nextPlayer,
                 turnCount: (data.turnCount || 1) + 1,
-                hasActed: false, // Réinitialise l'action pour le joueur suivant
                 players: players,
                 logs: logs.slice(0, 20)
             });
@@ -660,7 +709,6 @@
             let players = data.players || {};
             let playerNames = Object.keys(players);
 
-            // Le robot choisit aléatoirement d'améliorer une tourelle ou fait directement son attaque
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
 
@@ -690,7 +738,6 @@
             await update(roomRef, {
                 activePlayer: nextPlayer,
                 turnCount: (data.turnCount || 1) + 1,
-                hasActed: false,
                 players: players,
                 logs: logs.slice(0, 20)
             });
@@ -734,91 +781,129 @@
                 }
             }
 
-            const banner = document.getElementById('turn-banner');
-            const btnAction = document.getElementById('btn-action');
-            const isMyTurn = (roomData.activePlayer === playerName);
-            const hasActed = roomData.hasActed || false;
+            updateTurnUI(roomData.activePlayer);
+            if(roomData.players) {
+                renderBoards(roomData.players);
+            }
+            if(roomData.logs) {
+                const logsContainer = document.getElementById('game-logs');
+                logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
+            }
+        }
 
-            // Gestion visuelle des cartes de tourelle selon si le joueur a déjà agi
-            const turretCards = document.querySelectorAll('.turret-card');
-            turretCards.forEach(card => {
-                if(isMyTurn && !hasActed) {
-                    card.style.opacity = "1";
-                    card.style.pointerEvents = "auto";
+        function updateTurnUI(activePlayer) {
+            const banner = document.getElementById('turn-banner');
+            const instructions = document.getElementById('turn-instructions');
+            const btnFinish = document.getElementById('btn-finish-turn');
+            const isMyTurn = (activePlayer === playerName);
+
+            const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
+
+            turretPairs.forEach(t => {
+                const btnUp = document.getElementById(`btn-up-${t}`);
+                const btnFire = document.getElementById(`btn-fire-${t}`);
+
+                if(isMyTurn) {
+                    if(turnStep === 1) {
+                        btnUp.disabled = false;
+                        btnFire.disabled = true;
+                    } else if(turnStep === 2) {
+                        btnUp.disabled = true;
+                        btnFire.disabled = false;
+                    } else {
+                        btnUp.disabled = true;
+                        btnFire.disabled = true;
+                    }
                 } else {
-                    card.style.opacity = "0.5";
-                    card.style.pointerEvents = "none";
+                    btnUp.disabled = true;
+                    btnFire.disabled = true;
                 }
             });
 
             if(isMyTurn) {
-                if(hasActed) {
-                    banner.innerHTML = `⚔️ Action effectuée ! Cliquez sur "Terminer mon tour".`;
-                    banner.style.borderColor = "#22c55e";
+                if(turnStep === 1) {
+                    banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 1 : Améliorez une tourelle.`;
+                    instructions.innerText = `Étape 1 : Cliquez sur "Améliorer" d'une tourelle.`;
+                    btnFinish.disabled = true;
+                } else if(turnStep === 2) {
+                    banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 2 : Tirez avec une tourelle.`;
+                    instructions.innerText = `Étape 2 : Cliquez sur "Tirer" pour vous défendre.`;
+                    btnFinish.disabled = true;
                 } else {
-                    banner.innerHTML = `⚔️ C'EST À VOUS DE JOUER ! (Choisissez 1 action de tourelle)`;
-                    banner.style.borderColor = "var(--gold)";
+                    banner.innerHTML = `⚔️ Défense effectuée ! Vous pouvez terminer votre tour.`;
+                    instructions.innerText = `Étape 3 : Cliquez ci-dessous pour lancer l'attaque ennemie.`;
+                    btnFinish.disabled = false;
                 }
-                btnAction.disabled = false;
+                banner.style.borderColor = "var(--gold)";
             } else {
-                banner.innerHTML = `⏳ Tour de <strong>${roomData.activePlayer}</strong> (Tour ${roomData.turnCount || 1})`;
+                banner.innerHTML = `⏳ Tour de <strong>${activePlayer}</strong>`;
                 banner.style.borderColor = "#475569";
-                btnAction.disabled = true;
+                instructions.innerText = `En attente du joueur actif...`;
+                btnFinish.disabled = true;
             }
+        }
 
-            if(roomData.players) {
-                const container = document.getElementById('all-players-boards');
-                container.innerHTML = '';
+        function renderBoards(players) {
+            const container = document.getElementById('all-players-boards');
+            container.innerHTML = '';
 
-                for(let pName in roomData.players) {
-                    const pData = roomData.players[pName];
-                    const isMe = (pName === playerName);
+            for(let pName in players) {
+                const pData = players[pName];
+                const isMe = (pName === playerName);
 
-                    let boardHTML = `
-                        <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
-                            <div class="player-title">
-                                <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : ''}</span>
-                            </div>
-                            <div class="battlefield-container">
+                let boardHTML = `
+                    <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
+                        <div class="player-title">
+                            <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : ''}</span>
+                        </div>
+                        <div class="battlefield-container">
+                `;
+
+                for (let path = 6; path >= 1; path--) {
+                    const status = pData.gateStatus?.[path] || 'intact';
+                    let gateClass = '';
+                    let gateText = `Porte ${path}<br>(${path} PV)`;
+                    if(status === 'damaged') {
+                        gateClass = 'broken';
+                        gateText = `Porte ${path}<br>Endommagée`;
+                    } else if(status === 'broken') {
+                        gateClass = 'broken';
+                        gateText = `Porte ${path}<br>BRISÉE`;
+                    }
+
+                    boardHTML += `
+                        <div class="path-column path-${path}">
+                            <div class="gate ${gateClass}" id="gate-${pName}-${path}">${gateText}</div>
+                            <div class="cells-container">
                     `;
 
-                    for (let path = 6; path >= 1; path--) {
-                        const status = pData.gateStatus?.[path] || 'intact';
-                        let gateClass = '';
-                        let gateText = `Porte ${path}<br>(${path} PV)`;
-                        if(status === 'damaged') {
-                            gateClass = 'broken';
-                            gateText = `Porte ${path}<br>Endommagée`;
-                        } else if(status === 'broken') {
-                            gateClass = 'broken';
-                            gateText = `Porte ${path}<br>BRISÉE`;
+                    for(let c = 6; c >= 1; c--) {
+                        let enemyTokenHTML = '';
+                        if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
+                            enemyTokenHTML = `<div class="enemy-token" title="Ennemi sur case ${c}">👹</div>`;
                         }
 
-                        boardHTML += `
-                            <div class="path-column path-${path}">
-                                <div class="gate ${gateClass}" id="gate-${pName}-${path}">${gateText}</div>
-                                <div class="cells-container">
-                        `;
-
-                        for(let c = 6; c >= 1; c--) {
-                            let enemyTokenHTML = '';
-                            if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
-                                enemyTokenHTML = `<div class="enemy-token" title="Ennemi sur case ${c}">👹</div>`;
+                        // Affichage des impacts avec badge X2, X3... sur votre plateau
+                        let hitClass = '';
+                        let badgeHTML = '';
+                        if(isMe) {
+                            const hitKey = `${path}-${c}`;
+                            if(lastHits[hitKey]) {
+                                hitClass = 'hit-active';
+                                if(lastHits[hitKey] > 1) {
+                                    badgeHTML = `<div class="hit-badge">X${lastHits[hitKey]}</div>`;
+                                }
                             }
-                            boardHTML += `<div class="cell" id="cell-${pName}-${path}-${c}">${enemyTokenHTML || c}</div>`;
                         }
 
-                        boardHTML += `</div></div>`;
+                        boardHTML += `<div class="cell ${hitClass}" id="cell-${pName}-${path}-${c}">${enemyTokenHTML || c}${badgeHTML}</div>`;
                     }
 
                     boardHTML += `</div></div>`;
-                    container.innerHTML += boardHTML;
                 }
-            }
 
-            if(roomData.logs) {
-                const logsContainer = document.getElementById('game-logs');
-                logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
+                boardHTML += `</div></div>`;
+                container.innerHTML += boardHTML;
             }
         }
     </script>
