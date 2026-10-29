@@ -45,7 +45,8 @@
             text-align: center;
         }
 
-        #lobby-screen, #waiting-room {
+        .screen {
+            display: none;
             background: var(--panel-bg);
             border: 2px solid var(--border-color);
             border-radius: 12px;
@@ -54,10 +55,11 @@
             width: 100%;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             text-align: center;
+            box-sizing: border-box;
         }
 
-        #waiting-room {
-            display: none;
+        .screen.active {
+            display: block;
         }
 
         .input-group {
@@ -112,6 +114,10 @@
             max-width: 1400px;
         }
 
+        #game-screen.active {
+            display: block;
+        }
+
         .game-header {
             display: flex;
             justify-content: space-between;
@@ -126,12 +132,13 @@
         .turn-banner {
             background: rgba(212, 175, 55, 0.15);
             border: 1px solid var(--gold);
-            padding: 10px;
+            padding: 12px;
             text-align: center;
             border-radius: 8px;
             margin-bottom: 20px;
             font-weight: bold;
             color: var(--gold);
+            font-size: 1.05rem;
         }
 
         .turrets-bar {
@@ -148,16 +155,28 @@
 
         .turret-card {
             background: #0f172a;
-            border: 1px solid var(--border-color);
+            border: 2px solid var(--border-color);
             border-radius: 8px;
-            padding: 8px;
-            cursor: pointer;
+            padding: 10px;
             transition: all 0.2s;
         }
 
-        .turret-card:hover {
+        .turret-card.active-action {
             border-color: var(--gold);
-            transform: translateY(-2px);
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .action-buttons button {
+            flex: 1;
+            padding: 6px 4px;
+            font-size: 0.7rem;
+            margin-top: 0;
         }
 
         .all-players-container {
@@ -321,8 +340,8 @@
     <h1>Dice Attack</h1>
     <div class="subtitle">Chronique des Chevaliers de la Table Ronde</div>
 
-    <!-- ÉCRAN DE CONNEXION -->
-    <div id="lobby-screen">
+    <!-- 1. LOBBY -->
+    <div id="lobby-screen" class="screen active">
         <h3>Rejoindre ou Créer une Partie</h3>
         <div class="input-group">
             <label>Votre Nom de Chevalier</label>
@@ -335,16 +354,17 @@
         <button class="btn" onclick="joinLobby()">Entrer dans la Salle d'Attente</button>
     </div>
 
-    <!-- SALLE D'ATTENTE (LOBBY AVEC BOUTON START) -->
-    <div id="waiting-room">
-        <h3>Salle d'Attente - Salon : <span id="waiting-room-code" style="color:var(--gold)">-</span></h3>
-        <p style="font-size: 0.9rem; color: #94a3b8;">Joueurs présents dans le salon :</p>
+    <!-- 2. SALLE D'ATTENTE -->
+    <div id="waiting-room" class="screen">
+        <h3>Salle d'Attente</h3>
+        <p style="font-size: 0.9rem; color: #94a3b8;">Salon : <span id="waiting-room-code" style="color:var(--gold); font-weight:bold;">-</span></p>
+        <p style="font-size: 0.85rem; color: #cbd5e1; margin-top: 10px;">Joueurs connectés :</p>
         <ul id="player-list"></ul>
-        <button class="btn" id="btn-start-game" onclick="startGame()">Lancer la Partie (Start)</button>
-        <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 10px;">Si vous êtes seul, un Robot (IA) sera ajouté automatiquement pour lancer la partie à 2.</p>
+        <button class="btn" onclick="startGame()">Lancer la Partie (Start)</button>
+        <p style="font-size: 0.7rem; color: #94a3b8; margin-top: 12px;">Si vous êtes seul, un Robot sera ajouté automatiquement.</p>
     </div>
 
-    <!-- ÉCRAN DE JEU -->
+    <!-- 3. JEU -->
     <div id="game-screen">
         <div class="game-header">
             <div>
@@ -356,16 +376,16 @@
 
         <div class="turn-banner" id="turn-banner">En attente du tour...</div>
 
-        <!-- Tourelles communes -->
+        <!-- Tourelles (Une seule action autorisée par tour : soit Améliorer, soit Tirer) -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Plateaux -->
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
             <div class="panel-box">
                 <h3>Actions de votre Tour</h3>
-                <button class="btn" id="btn-action" onclick="executeTurnAction()">Terminer mon tour & Lancer l'attaque</button>
+                <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 8px;">Règle : 1 seule action de tourelle par tour, puis terminez votre tour.</div>
+                <button class="btn" id="btn-action" onclick="finishTurn()">Terminer mon tour (Attaque des monstres)</button>
                 <div id="dice-result" style="margin-top: 10px; font-weight: bold; color: var(--gold);"></div>
             </div>
             <div class="panel-box">
@@ -390,6 +410,18 @@
 
         let currentRoom = null;
         let playerName = null;
+        let isListenerActive = false;
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('game-screen').classList.remove('active');
+            
+            if(screenId === 'game-screen') {
+                document.getElementById('game-screen').classList.add('active');
+            } else {
+                document.getElementById(screenId).classList.add('active');
+            }
+        }
 
         window.joinLobby = async function() {
             playerName = document.getElementById('player-name').value.trim();
@@ -404,9 +436,8 @@
             const snapshot = await get(roomRef);
 
             if (!snapshot.exists()) {
-                // Création du salon
                 await set(roomRef, {
-                    status: 'waiting', // waiting ou playing
+                    status: 'waiting',
                     creator: playerName,
                     turnCount: 1,
                     turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
@@ -440,40 +471,14 @@
                 }
             }
 
-            document.getElementById('lobby-screen').style.display = 'none';
-            document.getElementById('waiting-room').style.display = 'block';
+            switchScreen('waiting-room');
             document.getElementById('waiting-room-code').innerText = currentRoom;
 
-            listenToLobby();
+            if(!isListenerActive) {
+                listenToRoom();
+                isListenerActive = true;
+            }
         };
-
-        function listenToLobby() {
-            const roomRef = ref(db, 'rooms/' + currentRoom);
-            onValue(roomRef, (snapshot) => {
-                if(!snapshot.exists()) return;
-                const roomData = snapshot.val();
-
-                // Si la partie a démarré, basculer sur l'écran de jeu
-                if(roomData.status === 'playing') {
-                    document.getElementById('waiting-room').style.display = 'none';
-                    document.getElementById('game-screen').style.display = 'block';
-                    document.getElementById('display-room').innerText = currentRoom;
-                    document.getElementById('display-player').innerText = playerName;
-                    initTurretsUI();
-                    processGameData(roomData);
-                    return;
-                }
-
-                // Mettre à jour la liste des joueurs dans le salon
-                const playerList = document.getElementById('player-list');
-                playerList.innerHTML = '';
-                if(roomData.players) {
-                    for(let p in roomData.players) {
-                        playerList.innerHTML += `<li>🛡️ Chevalier ${p} ${p === roomData.creator ? '(Hôte)' : ''}</li>`;
-                    }
-                }
-            });
-        }
 
         window.startGame = async function() {
             const roomRef = ref(db, 'rooms/' + currentRoom);
@@ -482,7 +487,6 @@
             let roomData = snapshot.val();
             let players = roomData.players || {};
 
-            // Règle du minimum de 2 joueurs : si on est seul, on ajoute un Robot automatique !
             let playerNames = Object.keys(players);
             if(playerNames.length < 2) {
                 const robotName = "Robot_Arthur";
@@ -494,15 +498,15 @@
                     }
                 };
                 let logs = roomData.logs || [];
-                logs.unshift(`Aucun autre joueur présent. Le Robot automatique s'est joint à la table !`);
+                logs.unshift(`Le Robot automatique s'est joint à la table !`);
                 await update(ref(db, `rooms/${currentRoom}`), { players, logs });
                 playerNames.push(robotName);
             }
 
-            // Démarrage officiel de la partie
             await update(roomRef, {
                 status: 'playing',
-                activePlayer: playerNames[0]
+                activePlayer: playerNames[0],
+                hasActed: false
             });
         };
 
@@ -518,17 +522,20 @@
             turretPairs.forEach(t => {
                 const labelName = t.replace('_', '/');
                 turretsContainer.innerHTML += `
-                    <div class="turret-card" onclick="upgradeTurret('${t}')">
+                    <div class="turret-card" id="turret-card-${t}">
                         <div style="font-size: 0.8rem; font-weight: bold; color: var(--gold);">Tourelle ${labelName}</div>
                         <div style="font-size: 1.1rem; margin: 3px 0;" id="turret-val-${t}">1</div>
-                        <div style="font-size: 0.65rem; color: #94a3b8;">Cliquer pour améliorer (+1)</div>
-                        <button class="btn" style="padding: 3px 6px; font-size: 0.7rem; margin-top: 4px;" onclick="fireTurret(event, '${t}')">Tirer</button>
+                        <div class="action-buttons">
+                            <button class="btn" onclick="doTurretAction('${t}', 'upgrade')">Améliorer</button>
+                            <button class="btn" onclick="doTurretAction('${t}', 'fire')">Tirer</button>
+                        </div>
                     </div>
                 `;
             });
         }
 
-        window.upgradeTurret = async function(turretKey) {
+        // Action unique par tour (Améliorer OU Tirer)
+        window.doTurretAction = async function(turretKey, actionType) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
             if(!snap.exists()) return;
@@ -539,49 +546,49 @@
                 return;
             }
 
-            let turrets = data.turrets || {};
-            let val = turrets[turretKey] || 1;
-            val = val >= 6 ? 1 : val + 1;
-            turrets[turretKey] = val;
-
-            await update(ref(db, `rooms/${currentRoom}`), { turrets });
-        };
-
-        window.fireTurret = async function(event, turretKey) {
-            event.stopPropagation();
-            const roomRef = ref(db, `rooms/${currentRoom}`);
-            const snap = await get(roomRef);
-            if(!snap.exists()) return;
-            const data = snap.val();
-
-            if(data.activePlayer !== playerName) {
-                alert("Ce n'est pas votre tour de tirer !");
+            if(data.hasActed) {
+                alert("Vous avez déjà effectué votre action de tourelle ce tour-ci ! Terminez votre tour.");
                 return;
             }
 
             let turrets = data.turrets || {};
-            const force = turrets[turretKey] || 1;
-            const [p1, p2] = turretKey.split('_').map(Number);
-            let rolls = [];
-            for(let i=0; i<force; i++) {
-                rolls.push(Math.floor(Math.random() * 6) + 1);
+            let logs = data.logs || [];
+
+            if(actionType === 'upgrade') {
+                let val = turrets[turretKey] || 1;
+                val = val >= 6 ? 1 : val + 1;
+                turrets[turretKey] = val;
+                logs.unshift(`${playerName} a renforcé la tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
+            } else if(actionType === 'fire') {
+                const force = turrets[turretKey] || 1;
+                const [p1, p2] = turretKey.split('_').map(Number);
+                let rolls = [];
+                for(let i=0; i<force; i++) {
+                    rolls.push(Math.floor(Math.random() * 6) + 1);
+                }
+
+                rolls.forEach(res => {
+                    const targetPath = Math.random() < 0.5 ? p1 : p2;
+                    const cellEl = document.getElementById(`cell-${playerName}-${targetPath}-${res}`);
+                    if(cellEl) {
+                        cellEl.classList.add('hit-active');
+                        setTimeout(() => cellEl.classList.remove('hit-active'), 800);
+                    }
+                });
+
+                logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
             }
 
-            rolls.forEach(res => {
-                const targetPath = Math.random() < 0.5 ? p1 : p2;
-                const cellEl = document.getElementById(`cell-${playerName}-${targetPath}-${res}`);
-                if(cellEl) {
-                    cellEl.classList.add('hit-active');
-                    setTimeout(() => cellEl.classList.remove('hit-active'), 800);
-                }
+            // Marque le joueur comme ayant agi (bloque d'autres actions de tourelle ce tour-ci)
+            await update(roomRef, {
+                turrets: turrets,
+                hasActed: true,
+                logs: logs.slice(0, 20)
             });
-
-            let logs = data.logs || [];
-            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
-            await update(ref(db, `rooms/${currentRoom}`), { logs: logs.slice(0, 20) });
         };
 
-        window.executeTurnAction = async function() {
+        // Terminer son tour : déclenche l'attaque ennemie chez les adversaires et passe au joueur suivant
+        window.finishTurn = async function() {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
             if(!snap.exists()) return;
@@ -599,7 +606,7 @@
             let players = data.players || {};
             let playerNames = Object.keys(players);
 
-            // Avancée des ennemis UNIQUEMENT sur le plateau des adversaires
+            // Avancée des ennemis sur les plateaux des adversaires
             for(let pName in players) {
                 if(pName === playerName) continue; 
 
@@ -622,28 +629,26 @@
                 });
             }
 
-            // Tour suivant
             let currentIndex = playerNames.indexOf(playerName);
             let nextIndex = (currentIndex + 1) % playerNames.length;
             let nextPlayer = playerNames[nextIndex];
 
             let logs = data.logs || [];
-            logs.unshift(`${playerName} a fini son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
+            logs.unshift(`${playerName} a terminé son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
 
-            await update(ref(db, `rooms/${currentRoom}`), {
+            await update(roomRef, {
                 activePlayer: nextPlayer,
                 turnCount: (data.turnCount || 1) + 1,
+                hasActed: false, // Réinitialise l'action pour le joueur suivant
                 players: players,
                 logs: logs.slice(0, 20)
             });
 
-            // Si le prochain joueur est le Robot, l'IA joue automatiquement après 1,5 seconde !
             if(nextPlayer.startsWith("Robot_")) {
                 setTimeout(playRobotTurn, 1500);
             }
         };
 
-        // Tour automatique du Robot si présent
         async function playRobotTurn() {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -655,7 +660,7 @@
             let players = data.players || {};
             let playerNames = Object.keys(players);
 
-            // Le robot fait progresser les ennemis chez les humains
+            // Le robot choisit aléatoirement d'améliorer une tourelle ou fait directement son attaque
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
 
@@ -680,16 +685,16 @@
             let nextPlayer = playerNames[nextIndex];
 
             let logs = data.logs || [];
-            logs.unshift(`🤖 Le Robot ${robotName} a joué. Dés d'attaque : [${d1}, ${d2}]. Tour de ${nextPlayer}.`);
+            logs.unshift(`🤖 Le Robot ${robotName} a joué. Attaque : [${d1}, ${d2}]. Tour de ${nextPlayer}.`);
 
             await update(roomRef, {
                 activePlayer: nextPlayer,
                 turnCount: (data.turnCount || 1) + 1,
+                hasActed: false,
                 players: players,
                 logs: logs.slice(0, 20)
             });
 
-            // Si le tour revient à un autre robot en chaîne
             if(nextPlayer.startsWith("Robot_")) {
                 setTimeout(playRobotTurn, 1500);
             }
@@ -700,8 +705,23 @@
             onValue(roomRef, (snapshot) => {
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
+
                 if(roomData.status === 'playing') {
+                    switchScreen('game-screen');
+                    document.getElementById('display-room').innerText = currentRoom;
+                    document.getElementById('display-player').innerText = playerName;
+                    if(!document.getElementById('turrets-container').hasChildNodes()) {
+                        initTurretsUI();
+                    }
                     processGameData(roomData);
+                } else {
+                    const playerList = document.getElementById('player-list');
+                    playerList.innerHTML = '';
+                    if(roomData.players) {
+                        for(let p in roomData.players) {
+                            playerList.innerHTML += `<li>🛡️ Chevalier ${p} ${p === roomData.creator ? '(Hôte)' : ''}</li>`;
+                        }
+                    }
                 }
             });
         }
@@ -717,10 +737,28 @@
             const banner = document.getElementById('turn-banner');
             const btnAction = document.getElementById('btn-action');
             const isMyTurn = (roomData.activePlayer === playerName);
+            const hasActed = roomData.hasActed || false;
+
+            // Gestion visuelle des cartes de tourelle selon si le joueur a déjà agi
+            const turretCards = document.querySelectorAll('.turret-card');
+            turretCards.forEach(card => {
+                if(isMyTurn && !hasActed) {
+                    card.style.opacity = "1";
+                    card.style.pointerEvents = "auto";
+                } else {
+                    card.style.opacity = "0.5";
+                    card.style.pointerEvents = "none";
+                }
+            });
 
             if(isMyTurn) {
-                banner.innerHTML = `⚔️ C'EST À VOUS DE JOUER ! (Tour ${roomData.turnCount || 1})`;
-                banner.style.borderColor = "var(--gold)";
+                if(hasActed) {
+                    banner.innerHTML = `⚔️ Action effectuée ! Cliquez sur "Terminer mon tour".`;
+                    banner.style.borderColor = "#22c55e";
+                } else {
+                    banner.innerHTML = `⚔️ C'EST À VOUS DE JOUER ! (Choisissez 1 action de tourelle)`;
+                    banner.style.borderColor = "var(--gold)";
+                }
                 btnAction.disabled = false;
             } else {
                 banner.innerHTML = `⏳ Tour de <strong>${roomData.activePlayer}</strong> (Tour ${roomData.turnCount || 1})`;
