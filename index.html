@@ -45,7 +45,6 @@
             text-align: center;
         }
 
-        /* Lobby / Connection Screen */
         #lobby-screen {
             background: var(--panel-bg);
             border: 2px solid var(--border-color);
@@ -97,7 +96,6 @@
             background: #e6c547;
         }
 
-        /* Game Screen */
         #game-screen {
             display: none;
             width: 100%;
@@ -164,7 +162,7 @@
 
         .cells-container {
             display: flex;
-            flex-direction: column-reverse; /* 6 en bas, 1 en haut */
+            flex-direction: column-reverse;
             gap: 8px;
             width: 100%;
             align-items: center;
@@ -262,7 +260,6 @@
     <h1>Dice Attack</h1>
     <div class="subtitle">Chronique des Chevaliers de la Table Ronde</div>
 
-    <!-- LOBBY SCREEN -->
     <div id="lobby-screen">
         <h3>Rejoindre ou Créer une Partie</h3>
         <div class="input-group">
@@ -276,7 +273,6 @@
         <button class="btn" onclick="joinGame()">Entrer dans la Lice</button>
     </div>
 
-    <!-- GAME SCREEN -->
     <div id="game-screen">
         <div class="game-header">
             <div>
@@ -286,17 +282,10 @@
             <button class="btn" style="width: auto; margin-top: 0; padding: 6px 12px; background: #ef4444; color: white;" onclick="leaveGame()">Quitter</button>
         </div>
 
-        <!-- Tourrelles -->
-        <div class="turrets-bar" id="turrets-container">
-            <!-- Généré dynamiquement en JS -->
-        </div>
+        <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Battlefield Principal -->
-        <div class="battlefield-container" id="battlefield">
-            <!-- 6 Chemins générés dynamiquement -->
-        </div>
+        <div class="battlefield-container" id="battlefield"></div>
 
-        <!-- Panneau d'Actions & Logs -->
         <div class="controls-panel">
             <div class="panel-box">
                 <h3>Actions de Combat</h3>
@@ -312,12 +301,10 @@
         </div>
     </div>
 
-    <!-- Firebase SDK (Version Modulaire v10) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        // Configuration Firebase (À remplacer par vos propres identifiants Firebase si nécessaire, ou utilisez une instance de test)
         const firebaseConfig = {
             databaseURL: "https://dice-attack-default-rtdb.firebaseio.com/"
         };
@@ -341,28 +328,22 @@
             const snapshot = await get(roomRef);
 
             if (!snapshot.exists()) {
-                // Création de la pièce avec état initial
                 await set(roomRef, {
                     creator: playerName,
-                    turrets: { '1/2': 1, '2/3': 1, '3/4': 1, '4/5': 1, '5/6': 1 },
+                    turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
                     players: {
                         [playerName]: {
-                            gates: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 }, // 1 vie, 2 vies... jusqu'à 6 vies
+                            gates: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 },
                             gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
                             enemies: {
-                                1: { pos: 6, hp: 6 },
-                                2: { pos: 6, hp: 6 },
-                                3: { pos: 6, hp: 6 },
-                                4: { pos: 6, hp: 6 },
-                                5: { pos: 6, hp: 6 },
-                                6: { pos: 6, hp: 6 }
+                                1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
+                                4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
                             }
                         }
                     },
                     logs: [`Le chevalier ${playerName} a ouvert la lice.`]
                 });
             } else {
-                // Rejoindre la pièce existante si le joueur n'y est pas
                 const playerData = snapshot.val().players?.[playerName];
                 if (!playerData) {
                     await update(ref(db, `rooms/${currentRoom}/players/${playerName}`), {
@@ -390,15 +371,15 @@
         };
 
         function initGameUI() {
-            // Création des tourelles
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            const turretPairs = ['1/2', '2/3', '3/4', '4/5', '5/6'];
+            const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
             
             turretPairs.forEach(t => {
+                const labelName = t.replace('_', '/');
                 turretsContainer.innerHTML += `
                     <div class="turret-card" onclick="upgradeTurret('${t}')">
-                        <div><strong>Tourelle ${t}</strong></div>
+                        <div><strong>Tourelle ${labelName}</strong></div>
                         <div style="font-size: 1.2rem; color: var(--gold); margin: 5px 0;" id="turret-val-${t}">1</div>
                         <div style="font-size: 0.75rem; color: #94a3b8;">Cliquer pour améliorer (+1)</div>
                         <button class="btn" style="padding: 4px 8px; font-size: 0.75rem; margin-top: 5px;" onclick="fireTurret(event, '${t}')">Tirer</button>
@@ -406,15 +387,13 @@
                 `;
             });
 
-            // Création des colonnes de chemins (6 à gauche, 1 à droite ou inverse selon préférence)
             const battlefield = document.getElementById('battlefield');
             battlefield.innerHTML = '';
             for (let path = 6; path >= 1; path--) {
                 battlefield.innerHTML += `
                     <div class="path-column path-${path}">
-                        <div class="gate" id="gate-${path}">Porte ${path}<br><span id="gate-status-${path}">Intacte (6 PV)</span></div>
+                        <div class="gate" id="gate-${path}">Porte ${path}<br><span id="gate-status-${path}">Intacte (${path} PV)</span></div>
                         <div class="cells-container" id="cells-${path}">
-                            <!-- Cases de 6 (bas) à 1 (haut) -->
                             ${[6, 5, 4, 3, 2, 1].map(c => `<div class="cell" id="cell-${path}-${c}">${c}</div>`).join('')}
                         </div>
                     </div>
@@ -426,13 +405,13 @@
             const turretRef = ref(db, `rooms/${currentRoom}/turrets/${turretKey}`);
             const snap = await get(turretRef);
             let val = snap.val() || 1;
-            val = val >= 6 ? 1 : val + 1; // Boucle de 1 à 6
+            val = val >= 6 ? 1 : val + 1;
             await set(turretRef, val);
             
             const logRef = ref(db, `rooms/${currentRoom}/logs`);
             const logSnap = await get(logRef);
             let logs = logSnap.val() || [];
-            logs.unshift(`${playerName} a renforcé la tourelle ${turretKey} (Force: ${val}).`);
+            logs.unshift(`${playerName} a renforcé la tourelle ${turretKey.replace('_', '/')} (Force: ${val}).`);
             await set(logRef, logs.slice(0, 20));
         };
 
@@ -441,18 +420,13 @@
             const turretSnap = await get(ref(db, `rooms/${currentRoom}/turrets/${turretKey}`));
             const force = turretSnap.val() || 1;
 
-            // Déterminer les deux chemins concernés par la tourelle (ex: '1/2' -> chemins 1 et 2)
-            const [p1, p2] = turretKey.split('/').map(Number);
-
-            // Lancer 'force' dés
+            const [p1, p2] = turretKey.split('_').map(Number);
             let rolls = [];
             for(let i=0; i<force; i++) {
-                rolls.print ? null : rolls.push(Math.floor(Math.random() * 6) + 1);
+                rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
-            // Animation visuelle des tirs touchés
             rolls.forEach(res => {
-                // Touche aléatoirement l'un des deux chemins sur la case égale au résultat du dé
                 const targetPath = Math.random() < 0.5 ? p1 : p2;
                 const cellEl = document.getElementById(`cell-${targetPath}-${res}`);
                 if(cellEl) {
@@ -461,16 +435,14 @@
                 }
             });
 
-            // Log de tir
             const logRef = ref(db, `rooms/${currentRoom}/logs`);
             const logSnap = await get(logRef);
             let logs = logSnap.val() || [];
-            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey} (Force ${force}) -> Résultats: [${rolls.join(', ')}].`);
+            logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> Résultats: [${rolls.join(', ')}].`);
             await set(logRef, logs.slice(0, 20));
         };
 
         window.triggerAttackPhase = async function() {
-            // Lance 2 dés d'attaque qui font progresser les ennemis vers le haut (diminution de la position vers 1)
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
 
@@ -484,13 +456,11 @@
             let enemies = data.enemies;
             let gateStatus = data.gateStatus || {1:'intact', 2:'intact', 3:'intact', 4:'intact', 5:'intact', 6:'intact'};
 
-            // Faire avancer les ennemis des chemins d1 et d2 d'une case vers le haut (vers 1)
             [d1, d2].forEach(pathNum => {
                 if(enemies[pathNum]) {
                     if(enemies[pathNum].pos > 1) {
-                        enemies[pathNum].pos -= 1; // Avance vers la porte
+                        enemies[pathNum].pos -= 1;
                     } else {
-                        // L'ennemi est déjà sur 1, il frappe la porte !
                         if(gateStatus[pathNum] === 'intact') {
                             gateStatus[pathNum] = 'damaged';
                         } else if(gateStatus[pathNum] === 'damaged') {
@@ -516,7 +486,6 @@
                 if(!snapshot.exists()) return;
                 const roomData = snapshot.val();
 
-                // Mettre à jour les tourelles
                 if(roomData.turrets) {
                     for(let [tKey, val] of Object.entries(roomData.turrets)) {
                         const el = document.getElementById(`turret-val-${tKey}`);
@@ -524,17 +493,14 @@
                     }
                 }
 
-                // Mettre à jour le joueur actuel (plateau, ennemis, portes)
                 if(roomData.players && roomData.players[playerName]) {
                     const pData = roomData.players[playerName];
                     
-                    // Nettoyer tous les tokens ennemis
                     for(let p=1; p<=6; p++) {
                         for(let c=1; c<=6; c++) {
                             const cell = document.getElementById(`cell-${p}-${c}`);
-                            if(cell) cell.innerHTML = c; // Réinitialiser le texte de la case
+                            if(cell) cell.innerHTML = c;
                         }
-                        // Statut des portes
                         const statusSpan = document.getElementById(`gate-status-${p}`);
                         const gateBox = document.getElementById(`gate-${p}`);
                         const status = pData.gateStatus?.[p] || 'intact';
@@ -550,7 +516,6 @@
                         }
                     }
 
-                    // Placer les ennemis sur leur case actuelle (progression du bas [6] vers le haut [1])
                     for(let [pathId, enemy] of Object.entries(pData.enemies)) {
                         const cell = document.getElementById(`cell-${pathId}-${enemy.pos}`);
                         if(cell) {
@@ -559,7 +524,6 @@
                     }
                 }
 
-                // Mettre à jour les logs
                 if(roomData.logs) {
                     const logsContainer = document.getElementById('game-logs');
                     logsContainer.innerHTML = roomData.logs.map(l => `<div>• ${l}</div>`).join('');
