@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dice Attack - Chevaliers de la Table Ronde version 1.0</title>
+    <title>Dice Attack - Chevaliers de la Table Ronde</title>
     <style>
         :root {
             --c-green: #2e7d32;
@@ -141,6 +141,7 @@
             font-size: 1.05rem;
         }
 
+        /* Tourelles de gauche (5/6) à droite (1/2) */
         .turrets-bar {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -354,7 +355,7 @@
 <body>
 
     <h1>Dice Attack</h1>
-    <div class="subtitle">Chronique des Chevaliers de la Table Ronde 1.0</div>
+    <div class="subtitle">Chronique des Chevaliers de la Table Ronde v1.1</div>
 
     <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
@@ -392,7 +393,7 @@
 
         <div class="turn-banner" id="turn-banner">En attente du tour...</div>
 
-        <!-- Tourelles de droite (1/2) à gauche (5/6) -->
+        <!-- Tourelles de gauche (5/6) à droite (1/2) -->
         <div class="turrets-bar" id="turrets-container"></div>
 
         <div class="all-players-container" id="all-players-boards"></div>
@@ -454,7 +455,6 @@
             const roomRef = ref(db, 'rooms/' + currentRoom);
             const snapshot = await get(roomRef);
 
-            // Génération initiale des ennemis avec PV selon leur chemin (chemin 1 = 1 PV, chemin 6 = 6 PV)
             const initialEnemies = {};
             for(let i=1; i<=6; i++) {
                 initialEnemies[i] = { pos: 6, hp: i };
@@ -465,7 +465,7 @@
                     status: 'waiting',
                     creator: playerName,
                     turnCount: 1,
-                    turrets: { '1_2': 1, '2_3': 1, '3_4': 1, '4_5': 1, '5_6': 1 },
+                    turrets: { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 },
                     players: {
                         [playerName]: {
                             gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
@@ -536,7 +536,8 @@
         function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
+            // Ordre de gauche à droite : 5/6, 4/5, 3/4, 2/3, 1/2
+            const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
             
             turretPairs.forEach(t => {
                 const labelName = t.replace('_', '/');
@@ -587,7 +588,7 @@
             updateTurnUI(data.activePlayer);
         };
 
-        // ÉTAPE 2 : Tir de défense avec application des dégâts sur les PV des ennemis
+        // ÉTAPE 2 : Tir de défense avec correction du ciblage sur les 2 colonnes
         window.fireTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -606,7 +607,12 @@
 
             let turrets = data.turrets || {};
             const force = turrets[turretKey] || 1;
-            const [p1, p2] = turretKey.split('_').map(Number);
+            
+            // Correction du split pour récupérer correctement les 2 chemins (ex: '3_2' -> p1 = 3, p2 = 2)
+            const parts = turretKey.split('_');
+            const p1 = parseInt(parts[0], 10);
+            const p2 = parseInt(parts[1], 10);
+
             let rolls = [];
             for(let i=0; i<force; i++) {
                 rolls.push(Math.floor(Math.random() * 6) + 1);
@@ -627,10 +633,8 @@
                     const targetPath = Math.random() < 0.5 ? p1 : p2;
                     let enemy = myData.enemies[targetPath];
                     if(enemy && enemy.pos === res) {
-                        // Ennemi touché sur sa case actuelle !
                         enemy.hp -= 1;
                         if(enemy.hp <= 0) {
-                            // S'il tombe à 0 PV, il retourne à la case 6 avec ses PV initiaux égaux au numéro du chemin
                             enemy.pos = 6;
                             enemy.hp = targetPath;
                         }
@@ -814,7 +818,7 @@
             const btnFinish = document.getElementById('btn-finish-turn');
             const isMyTurn = (activePlayer === playerName);
 
-            const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
+            const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
 
             turretPairs.forEach(t => {
                 const btnUp = document.getElementById(`btn-up-${t}`);
@@ -898,7 +902,6 @@
                         let enemyTokenHTML = '';
                         if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
                             const enemy = pData.enemies[path];
-                            // Affiche l'icône du monstre et ses points de vie actuels (ex: 3 PV)
                             enemyTokenHTML = `<div class="enemy-token" title="PV: ${enemy.hp}">👹<span>${enemy.hp}pv</span></div>`;
                         }
 
