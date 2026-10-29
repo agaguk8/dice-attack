@@ -412,12 +412,10 @@ async function playRobotTurn() {
 
     // 1. ÉTAPE D'AMÉLIORATION DU ROBOT
     let turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
-    // On cherche les tourelles du robot qui ne sont pas encore au max (6)
     let availableTurrets = turretPairs.filter(t => (robotData.turrets[t] || 1) < 6);
 
     let upgradedTurretKey = null;
     if (availableTurrets.length > 0) {
-        // Le robot choisit l'une d'entre elles au hasard (ou la première)
         let randomTurret = availableTurrets[Math.floor(Math.random() * availableTurrets.length)];
         robotData.turrets[randomTurret] = (robotData.turrets[randomTurret] || 1) + 1;
         robotData.lastUpgradedTurret = randomTurret;
@@ -425,7 +423,6 @@ async function playRobotTurn() {
     }
 
     // 2. ÉTAPE DE TIR DE DÉFENSE DU ROBOT
-    // S'il lui reste des tourelles à améliorer, il tire avec celle qu'il vient d'améliorer, sinon il prend une tourelle au hasard
     let firingTurretKey = upgradedTurretKey || turretPairs[Math.floor(Math.random() * turretPairs.length)];
     let robotTurretForce = robotData.turrets[firingTurretKey] || 1;
 
@@ -447,7 +444,6 @@ async function playRobotTurn() {
     });
     robotData.lastHits = robotHits;
 
-    // Application des dégâts du robot sur ses propres monstres
     if(robotData.enemies) {
         [p1, p2].forEach(col => {
             robotRolls.forEach(res => {
@@ -483,7 +479,6 @@ async function playRobotTurn() {
     let gameOver = false;
     let loserName = null;
 
-    // Réinitialisation des impacts des autres joueurs
     for(let pName in players) {
         if(pName !== robotName) {
             players[pName].lastHits = {};
@@ -530,7 +525,6 @@ async function playRobotTurn() {
         return;
     }
 
-    // Passage au joueur suivant
     let playerNames = Object.keys(players);
     let currentIndex = playerNames.indexOf(robotName);
     let nextIndex = (currentIndex + 1) % playerNames.length;
@@ -553,7 +547,6 @@ async function playRobotTurn() {
         logs: logs.slice(0, 20)
     });
 
-    // Si le joueur suivant est aussi un robot, on relance sa boucle après un court délai
     if(nextPlayer.startsWith("Robot_")) {
         setTimeout(playRobotTurn, 1500);
     }
