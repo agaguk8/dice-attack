@@ -436,7 +436,7 @@
         <!-- Tourelles de contrôle -->
         <div class="turrets-bar" id="turrets-container"></div>
 
-        <!-- Plateaux (Votre plateau à gauche) -->
+        <!-- Plateaux -->
         <div class="all-players-container" id="all-players-boards"></div>
 
         <div class="controls-panel">
@@ -499,7 +499,8 @@
                 const data = snapshot.val();
                 const now = Date.now();
                 const lastActivity = data.lastActivity || now;
-                if (now - lastActivity > 5 * 60 * 1000) {
+                // Nettoyage automatique si > 5 min d'inactivité ou si la partie est terminée
+                if ((now - lastActivity > 5 * 60 * 1000) || data.status === 'gameover') {
                     await remove(roomRef);
                 }
             }
@@ -700,7 +701,6 @@
             let myData = players[playerName];
             if(!myData || !myData.turrets) return;
 
-            // La force de tir reste strictement plafonnée au niveau max (6 max, sans empilement infini)
             const force = myData.turrets[turretKey] || 1;
             
             const parts = turretKey.split('_');
@@ -763,12 +763,8 @@
             let players = data.players || {};
             let myData = players[playerName];
 
-            // Vérification si le joueur courant a TOUTES ses tourelles max (6)
             let isMyTurretsAllMax = areAllTurretsMax(myData.turrets);
 
-            // Nombre de dés d'attaque de base = 2. 
-            // Si le joueur actif a tout maxé, on augmente le nombre de dés d'attaque de +1 à chaque tour où il joue.
-            // On stocke un compteur de tours max par joueur ou global, ou on utilise l'augmentation basée sur ses tours passés.
             if (!myData.maxTurnsCount) {
                 myData.maxTurnsCount = 0;
             }
@@ -776,7 +772,7 @@
             let attackDiceCount = 2;
             if (isMyTurretsAllMax) {
                 myData.maxTurnsCount += 1;
-                attackDiceCount = 2 + myData.maxTurnsCount; // 3, puis 4, puis 5, etc.
+                attackDiceCount = 2 + myData.maxTurnsCount;
             }
 
             let attackRolls = [];
@@ -827,6 +823,11 @@
                     lastActivity: Date.now(),
                     logs: logs.slice(0, 20)
                 });
+
+                // Suppression automatique du salon 30 secondes après la fin de partie
+                setTimeout(async () => {
+                    await remove(roomRef);
+                }, 30000);
                 return;
             }
 
@@ -923,6 +924,10 @@
                     lastActivity: Date.now(),
                     logs: logs.slice(0, 20)
                 });
+
+                setTimeout(async () => {
+                    await remove(roomRef);
+                }, 30000);
                 return;
             }
 
@@ -956,14 +961,22 @@
         function listenToRoom() {
             const roomRef = ref(db, 'rooms/' + currentRoom);
             onValue(roomRef, (snapshot) => {
-                if(!snapshot.exists()) return;
-                const roomData = snapshot.val();
-
-                if (roomData.lastActivity && (Date.now() - roomData.lastActivity > 5 * 60 * 1000)) {
-                    remove(roomRef);
-                    alert("Le salon a été réinitialisé en raison d'une inactivité de plus de 5 minutes.");
+                if(!snapshot.exists()) {
+                    alert("Le salon a été réinitialisé ou vidé (inactivité ou fin de partie).");
                     location.reload();
                     return;
+                }
+                const roomData = snapshot.val();
+
+                // Nettoyage immédiat si inactivité > 5 min ou si la partie est terminée
+                if ((roomData.lastActivity && (Date.now() - roomData.lastActivity > 5 * 60 * 1000)) || roomData.status === 'gameover') {
+                    // Si gameover, on laisse 30 secondes avant d'expulser
+                    if (roomData.status !== 'gameover') {
+                        remove(roomRef);
+                        alert("Le salon a été vidé en raison d'une inactivité de plus de 5 minutes.");
+                        location.reload();
+                        return;
+                    }
                 }
 
                 if(roomData.status === 'playing' || roomData.status === 'gameover') {
@@ -1008,7 +1021,7 @@
 
             if(roomData.status === 'gameover') {
                 const banner = document.getElementById('turn-banner');
-                banner.innerHTML = `💀 FIN DE PARTIE - Le chevalier <strong>${roomData.loser}</strong> a perdu ! Les autres gagnent !`;
+                banner.innerHTML = `💀 FIN DE PARTIE - Le chevalier <strong>${roomData.loser}</strong> a perdu ! Le salon se videra dans quelques secondes...`;
                 banner.style.borderColor = "#ef4444";
                 document.getElementById('btn-finish-turn').disabled = true;
             } else {
@@ -1074,7 +1087,7 @@
                     btnFinish.disabled = true;
                 } else if(turnStep === 2) {
                     if (allMax) {
-                        banner.innerHTML = `🔥 TOUTES TOURELLES MAX ! Vos tirs restent à force maximale (6 max). Attention aux attaques ennemies accrues !`;
+                        banner.innerHTML = `🔥 TOUTES TOURELLES MAX ! Tirez avec vos tourelles à niveau 6 max !`;
                         instructions.innerText = `Toutes tourelles au max : cliquez sur "Tirer" pour lancer vos défenses.`;
                     } else {
                         banner.innerHTML = `⚔️ C'EST À VOUS ! Étape 2 : Tirez avec une tourelle.`;
@@ -1181,5 +1194,5 @@
         }
     </script>
 </body>
-V2.1
+    V2.2
 </html>
