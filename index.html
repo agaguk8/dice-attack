@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dice Attack - Chevaliers de la Table Ronde</title>
+    <title>Dice Attack - Chevaliers de la Table Ronde version 1.0</title>
     <style>
         :root {
             --c-green: #2e7d32;
@@ -141,7 +141,6 @@
             font-size: 1.05rem;
         }
 
-        /* Tourelles de droite à gauche : 1/2 jusqu'à 5/6 */
         .turrets-bar {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -268,7 +267,6 @@
             position: relative;
         }
 
-        /* Style visuel des impacts de tirs avec multiplicateurs X2, X3... */
         .cell.hit-active {
             background: #2563eb !important;
             color: white;
@@ -296,18 +294,20 @@
         }
 
         .enemy-token {
-            width: 24px;
-            height: 24px;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
             background: #ef4444;
             color: white;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             font-weight: bold;
             border: 2px solid white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            line-height: 1;
         }
 
         .controls-panel {
@@ -356,7 +356,7 @@
     <h1>Dice Attack</h1>
     <div class="subtitle">Chronique des Chevaliers de la Table Ronde</div>
 
-    <!-- 1. LOBBY -->
+    <!-- LOBBY -->
     <div id="lobby-screen" class="screen active">
         <h3>Rejoindre ou Créer une Partie</h3>
         <div class="input-group">
@@ -370,7 +370,7 @@
         <button class="btn" onclick="joinLobby()">Entrer dans la Salle d'Attente</button>
     </div>
 
-    <!-- 2. SALLE D'ATTENTE -->
+    <!-- SALLE D'ATTENTE -->
     <div id="waiting-room" class="screen">
         <h3>Salle d'Attente</h3>
         <p style="font-size: 0.9rem; color: #94a3b8;">Salon : <span id="waiting-room-code" style="color:var(--gold); font-weight:bold;">-</span></p>
@@ -380,7 +380,7 @@
         <p style="font-size: 0.7rem; color: #94a3b8; margin-top: 12px;">Si vous êtes seul, un Robot sera ajouté automatiquement.</p>
     </div>
 
-    <!-- 3. JEU -->
+    <!-- JEU -->
     <div id="game-screen">
         <div class="game-header">
             <div>
@@ -428,9 +428,8 @@
         let playerName = null;
         let isListenerActive = false;
         
-        // État local du tour pour gérer la séquence (1: Amélioration obligatoire, 2: Tir obligatoire, 3: Terminer)
         let turnStep = 1; 
-        let lastHits = {}; // Stocke les impacts de tirs pour l'affichage local
+        let lastHits = {}; 
 
         function switchScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -455,6 +454,12 @@
             const roomRef = ref(db, 'rooms/' + currentRoom);
             const snapshot = await get(roomRef);
 
+            // Génération initiale des ennemis avec PV selon leur chemin (chemin 1 = 1 PV, chemin 6 = 6 PV)
+            const initialEnemies = {};
+            for(let i=1; i<=6; i++) {
+                initialEnemies[i] = { pos: 6, hp: i };
+            }
+
             if (!snapshot.exists()) {
                 await set(roomRef, {
                     status: 'waiting',
@@ -464,10 +469,7 @@
                     players: {
                         [playerName]: {
                             gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
-                            enemies: {
-                                1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
-                                4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
-                            }
+                            enemies: initialEnemies
                         }
                     },
                     logs: [`Le chevalier ${playerName} a ouvert la salle d'attente.`]
@@ -482,10 +484,7 @@
                 if (!players[playerName]) {
                     players[playerName] = {
                         gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
-                        enemies: {
-                            1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
-                            4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
-                        }
+                        enemies: initialEnemies
                     };
                     await update(ref(db, `rooms/${currentRoom}/players`), players);
                 }
@@ -510,12 +509,13 @@
             let playerNames = Object.keys(players);
             if(playerNames.length < 2) {
                 const robotName = "Robot_Arthur";
+                const robotEnemies = {};
+                for(let i=1; i<=6; i++) {
+                    robotEnemies[i] = { pos: 6, hp: i };
+                }
                 players[robotName] = {
                     gateStatus: { 1: 'intact', 2: 'intact', 3: 'intact', 4: 'intact', 5: 'intact', 6: 'intact' },
-                    enemies: {
-                        1: { pos: 6, hp: 6 }, 2: { pos: 6, hp: 6 }, 3: { pos: 6, hp: 6 },
-                        4: { pos: 6, hp: 6 }, 5: { pos: 6, hp: 6 }, 6: { pos: 6, hp: 6 }
-                    }
+                    enemies: robotEnemies
                 };
                 let logs = roomData.logs || [];
                 logs.unshift(`Le Robot automatique s'est joint à la table !`);
@@ -536,7 +536,6 @@
         function initTurretsUI() {
             const turretsContainer = document.getElementById('turrets-container');
             turretsContainer.innerHTML = '';
-            // Ordre inversé demandé : de droite à gauche (1/2, 2/3, 3/4, 4/5, 5/6)
             const turretPairs = ['1_2', '2_3', '3_4', '4_5', '5_6'];
             
             turretPairs.forEach(t => {
@@ -584,12 +583,11 @@
                 logs: logs.slice(0, 20)
             });
 
-            // Passage à l'étape 2 : Le tir
             turnStep = 2;
             updateTurnUI(data.activePlayer);
         };
 
-        // ÉTAPE 2 : Tir de défense
+        // ÉTAPE 2 : Tir de défense avec application des dégâts sur les PV des ennemis
         window.fireTurret = async function(turretKey) {
             const roomRef = ref(db, `rooms/${currentRoom}`);
             const snap = await get(roomRef);
@@ -614,7 +612,6 @@
                 rolls.push(Math.floor(Math.random() * 6) + 1);
             }
 
-            // Calcul des impacts pour affichage avec multiplicateurs X2, X3...
             lastHits = {};
             rolls.forEach(res => {
                 const targetPath = Math.random() < 0.5 ? p1 : p2;
@@ -622,15 +619,36 @@
                 lastHits[key] = (lastHits[key] || 0) + 1;
             });
 
+            // Application des dégâts sur VOTRE propre plateau
+            let players = data.players || {};
+            let myData = players[playerName];
+            if(myData && myData.enemies) {
+                rolls.forEach(res => {
+                    const targetPath = Math.random() < 0.5 ? p1 : p2;
+                    let enemy = myData.enemies[targetPath];
+                    if(enemy && enemy.pos === res) {
+                        // Ennemi touché sur sa case actuelle !
+                        enemy.hp -= 1;
+                        if(enemy.hp <= 0) {
+                            // S'il tombe à 0 PV, il retourne à la case 6 avec ses PV initiaux égaux au numéro du chemin
+                            enemy.pos = 6;
+                            enemy.hp = targetPath;
+                        }
+                    }
+                });
+            }
+
             let logs = data.logs || [];
             logs.unshift(`${playerName} a tiré avec la tourelle ${turretKey.replace('_', '/')} (Force ${force}) -> [${rolls.join(', ')}].`);
             
-            await update(roomRef, { logs: logs.slice(0, 20) });
+            await update(roomRef, { 
+                players: players,
+                logs: logs.slice(0, 20) 
+            });
 
-            // Passage à l'étape 3 : Terminer le tour
             turnStep = 3;
             updateTurnUI(data.activePlayer);
-            renderBoards(data.players);
+            renderBoards(players);
         };
 
         // ÉTAPE 3 : Terminer le tour (Déclenche l'attaque ennemie chez les adversaires)
@@ -682,7 +700,6 @@
             let logs = data.logs || [];
             logs.unshift(`${playerName} a terminé son tour. Attaque [${d1}, ${d2}] chez les adversaires. Tour de ${nextPlayer}.`);
 
-            // Réinitialise l'état local du tour
             turnStep = 1;
             lastHits = {};
 
@@ -880,10 +897,11 @@
                     for(let c = 6; c >= 1; c--) {
                         let enemyTokenHTML = '';
                         if(pData.enemies && pData.enemies[path] && pData.enemies[path].pos === c) {
-                            enemyTokenHTML = `<div class="enemy-token" title="Ennemi sur case ${c}">👹</div>`;
+                            const enemy = pData.enemies[path];
+                            // Affiche l'icône du monstre et ses points de vie actuels (ex: 3 PV)
+                            enemyTokenHTML = `<div class="enemy-token" title="PV: ${enemy.hp}">👹<span>${enemy.hp}pv</span></div>`;
                         }
 
-                        // Affichage des impacts avec badge X2, X3... sur votre plateau
                         let hitClass = '';
                         let badgeHTML = '';
                         if(isMe) {
