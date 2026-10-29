@@ -28,6 +28,7 @@ function switchScreen(screenId) {
 window.joinLobby = async function() {
     playerName = document.getElementById('player-name').value.trim();
     currentRoom = document.getElementById('room-code').value.trim();
+    const playerTheme = document.getElementById('player-theme') ? document.getElementById('player-theme').value : 'default';
 
     if (!playerName || !currentRoom) {
         alert("Veuillez entrer un nom et un code de salon.");
@@ -72,7 +73,8 @@ window.joinLobby = async function() {
                     turrets: initialTurrets,
                     enemies: initialEnemies,
                     lastHits: {},
-                    lastUpgradedTurret: null
+                    lastUpgradedTurret: null,
+                    theme: playerTheme
                 }
             },
             logs: [`Le chevalier ${playerName} a ouvert la salle d'attente.`]
@@ -90,7 +92,8 @@ window.joinLobby = async function() {
                 turrets: initialTurrets,
                 enemies: initialEnemies,
                 lastHits: {},
-                lastUpgradedTurret: null
+                lastUpgradedTurret: null,
+                theme: playerTheme
             };
             await update(ref(db, `rooms/${currentRoom}/players`), players);
         }
@@ -127,7 +130,8 @@ window.startGame = async function() {
             turrets: robotTurrets,
             enemies: robotEnemies,
             lastHits: {},
-            lastUpgradedTurret: null
+            lastUpgradedTurret: null,
+            theme: 'vampire'
         };
         let logs = roomData.logs || [];
         logs.unshift(`Le Robot automatique s'est joint à la table !`);
@@ -716,6 +720,7 @@ function renderBoards(players) {
         const isMe = (pName === playerName);
         const pTurrets = pData.turrets || { '5_6': 1, '4_5': 1, '3_4': 1, '2_3': 1, '1_2': 1 };
         const lastUpgraded = pData.lastUpgradedTurret;
+        const themeClass = pData.theme ? `theme-${pData.theme}` : '';
 
         let turretsMiniHTML = `<div class="board-turrets-mini">`;
         const turretPairs = ['5_6', '4_5', '3_4', '2_3', '1_2'];
@@ -732,7 +737,7 @@ function renderBoards(players) {
         turretsMiniHTML += `</div>`;
 
         let boardHTML = `
-            <div class="player-board-wrapper ${isMe ? 'is-me' : ''}">
+            <div class="player-board-wrapper ${isMe ? 'is-me' : ''} ${themeClass}">
                 <div class="player-title">
                     <span>Chevalier : ${pName} ${isMe ? '(Votre Plateau)' : '(Adversaire)'}</span>
                 </div>
