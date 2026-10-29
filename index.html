@@ -19,6 +19,16 @@
             <label>Votre Nom de Chevalier</label>
             <input type="text" id="player-name" placeholder="Ex: Lancelot">
         </div>
+        <!-- Dans l'écran du lobby, sous l'input du nom -->
+<div class="input-group">
+    <label>Choisissez votre Thème</label>
+    <select id="player-theme" style="width: 100%; padding: 10px; background: #0f172a; border: 1px solid var(--border-color); color: white; border-radius: 6px;">
+        <option value="default">Classique (Table Ronde)</option>
+        <option value="vampire">🦇 Château Vampire</option>
+        <option value="toxic">☣️ Laboratoire Toxique</option>
+        <option value="fire">🔥 Donjon de Lave</option>
+    </select>
+</div>
         <div class="input-group">
             <label>Code du Salon</label>
             <input type="text" id="room-code" placeholder="Ex: table-ronde-1">
@@ -73,5 +83,5 @@
     <!-- Lien vers le fichier JavaScript principal (type="module") -->
     <script type="module" src="game.js"></script>
 </body>
-    V3.0
+    V3.1
 </html>
