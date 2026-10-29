@@ -356,6 +356,61 @@ h1 {
     border-radius: 10px;
     border: 1px solid var(--border-color);
 }
+/* --- THÈMES DES PLATEAUX --- */
+
+/* Thème Classique par défaut */
+.player-board-wrapper {
+    background: var(--panel-bg);
+    transition: all 0.3s ease;
+}
+
+/* Thème Vampire : Fond sombre teinté de rouge sang et texture gothique */
+.player-board-wrapper.theme-vampire {
+    background: linear-gradient(135deg, rgba(40, 5, 10, 0.95) 0%, rgba(20, 5, 10, 0.98) 100%), 
+                url('https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=600&auto=format&fit=crop') center/cover;
+    border-color: #881337 !important;
+    box-shadow: 0 10px 30px rgba(136, 19, 55, 0.4);
+}
+.player-board-wrapper.theme-vampire .player-title {
+    color: #f43f5e;
+}
+.player-board-wrapper.theme-vampire .gate {
+    background: rgba(136, 19, 55, 0.3);
+    border-color: #f43f5e;
+    color: #f43f5e;
+}
+
+/* Thème Toxique : Fond verdâtre radioactif */
+.player-board-wrapper.theme-toxic {
+    background: linear-gradient(135deg, rgba(5, 35, 15, 0.95) 0%, rgba(2, 20, 8, 0.98) 100%),
+                url('https://images.unsplash.com/photo-1579783902614-a3fb3927b675?q=80&w=600&auto=format&fit=crop') center/cover;
+    border-color: #166534 !important;
+    box-shadow: 0 10px 30px rgba(22, 101, 52, 0.4);
+}
+.player-board-wrapper.theme-toxic .player-title {
+    color: #4ade80;
+}
+.player-board-wrapper.theme-toxic .gate {
+    background: rgba(22, 101, 52, 0.3);
+    border-color: #4ade80;
+    color: #4ade80;
+}
+
+/* Thème Donjon de Lave */
+.player-board-wrapper.theme-fire {
+    background: linear-gradient(135deg, rgba(45, 15, 5, 0.95) 0%, rgba(20, 8, 2, 0.98) 100%),
+                url('https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=600&auto=format&fit=crop') center/cover;
+    border-color: #c2410c !important;
+    box-shadow: 0 10px 30px rgba(194, 65, 12, 0.4);
+}
+.player-board-wrapper.theme-fire .player-title {
+    color: #fb923c;
+}
+.player-board-wrapper.theme-fire .gate {
+    background: rgba(194, 65, 12, 0.3);
+    border-color: #fb923c;
+    color: #fb923c;
+}
 
 .log-box {
     background: #0f172a;
